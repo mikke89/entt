@@ -123,7 +123,7 @@ TEST(DefaultRegistry, Functionalities) {
     ASSERT_EQ(registry.get<char>(e0), registry.get<char>(e2));
     ASSERT_NE(&registry.get<int>(e0), &registry.get<int>(e2));
     ASSERT_NE(&registry.get<char>(e0), &registry.get<char>(e2));
-
+	
     ASSERT_NO_THROW(registry.replace<int>(e0, 0));
     ASSERT_EQ(registry.get<int>(e0), 0);
 
@@ -193,6 +193,12 @@ TEST(DefaultRegistry, Functionalities) {
     ASSERT_EQ(registry.size<int>(), entt::DefaultRegistry::size_type{0});
     ASSERT_EQ(registry.size<char>(), entt::DefaultRegistry::size_type{0});
     ASSERT_TRUE(registry.empty<int>());
+
+	const auto e6 = registry.create();
+
+	ASSERT_EQ(registry.get_if<long>(e0), nullptr);
+	ASSERT_EQ(registry.get_if<long>(e6), nullptr);
+	ASSERT_EQ(registry.get_if<long>(entt::null), nullptr);
 }
 
 TEST(DefaultRegistry, RawData) {

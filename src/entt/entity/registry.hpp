@@ -737,6 +737,34 @@ public:
         return const_cast<Component &>(const_cast<const Registry *>(this)->get<Component>(entity));
     }
 
+	/**
+	* @brief Returns a pointer to the given component for an entity, or nullptr
+	*        if invalid.
+	*
+	* @tparam Component Type of component to get.
+	* @param entity A valid entity identifier.
+	* @return A pointer to the component owned by the entity.
+	*/
+	template<typename Component>
+	const Component * get_if(const entity_type entity) const ENTT_NOEXCEPT {
+		if (!managed<Component>() || !valid(entity)) return nullptr;
+		auto& c = pool<Component>().get(entity);
+		return &c;
+	}
+
+	/**
+	* @brief Returns a pointer to the given component for an entity, or nullptr
+	*        if invalid.
+	*
+	* @tparam Component Type of component to get.
+	* @param entity A valid entity identifier.
+	* @return A pointer to the component owned by the entity.
+	*/
+	template<typename Component>
+	inline Component * get_if(const entity_type entity) ENTT_NOEXCEPT {
+		return const_cast<Component *>(const_cast<const Registry *>(this)->get_if<Component>(entity));
+	}
+
     /**
      * @brief Returns a reference to the given components for an entity.
      *
