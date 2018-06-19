@@ -206,23 +206,23 @@ TEST(DefaultRegistry, GetIf) {
 	registry.assign<int>(e1);
 	registry.assign<char>(e1);
 
-	ASSERT_TRUE(registry.get_if<long>(e0));
-	ASSERT_FALSE(registry.get_if<long>(e1));
-	ASSERT_FALSE(registry.get_if<long>(e2));
+	ASSERT_TRUE(registry.unpack<long>(e0));
+	ASSERT_FALSE(registry.unpack<long>(e1));
+	ASSERT_FALSE(registry.unpack<long>(e2));
 
-	auto&[l0, i0, c0] = registry.get_if<long, int, char>(e0);
+	auto&[l0, i0, c0] = registry.unpack<long, int, char>(e0);
 
 	ASSERT_TRUE(l0);
 	ASSERT_FALSE(i0);
 	ASSERT_FALSE(c0);
 
-	auto&[l1, i1, c1] = registry.get_if<long, int, char>(e1);
+	auto&[l1, i1, c1] = registry.unpack<long, int, char>(e1);
 
 	ASSERT_FALSE(l1);
 	ASSERT_TRUE(i1);
 	ASSERT_TRUE(c1);
 
-	auto&[l2, i2, c2] = registry.get_if<long, int, char>(e2);
+	auto&[l2, i2, c2] = registry.unpack<long, int, char>(e2);
 
 	ASSERT_FALSE(l2);
 	ASSERT_FALSE(i2);

@@ -745,7 +745,7 @@ public:
 	* @return A pointer to the component owned by the entity, or nullptr.
 	*/
 	template<typename Component>
-	const Component * get_if(const entity_type entity) const ENTT_NOEXCEPT {
+	const Component * unpack(const entity_type entity) const ENTT_NOEXCEPT {
 		assert(valid(entity));
 		if (!has<Component>(entity)) return nullptr;
 		auto& c = pool<Component>().get(entity);
@@ -760,8 +760,8 @@ public:
 	* @return A pointer to the component owned by the entity, or nullptr.
 	*/
 	template<typename Component>
-	inline Component * get_if(const entity_type entity) ENTT_NOEXCEPT {
-		return const_cast<Component *>(const_cast<const Registry *>(this)->get_if<Component>(entity));
+	inline Component * unpack(const entity_type entity) ENTT_NOEXCEPT {
+		return const_cast<Component *>(const_cast<const Registry *>(this)->unpack<Component>(entity));
 	}
 
     /**
@@ -813,8 +813,8 @@ public:
 	*/
 	template<typename... Component>
 	inline std::enable_if_t<(sizeof...(Component) > 1), std::tuple<const Component *...>>
-	get_if(const entity_type entity) const ENTT_NOEXCEPT {
-		return std::tuple<const Component *...>{get_if<Component>(entity)...};
+	unpack(const entity_type entity) const ENTT_NOEXCEPT {
+		return std::tuple<const Component *...>{unpack<Component>(entity)...};
 	}
 
 	/**
@@ -826,8 +826,8 @@ public:
 	*/
 	template<typename... Component>
 	inline std::enable_if_t<(sizeof...(Component) > 1), std::tuple<Component *...>>
-	get_if(const entity_type entity) ENTT_NOEXCEPT {
-		return std::tuple<Component *...>{get_if<Component>(entity)...};
+	unpack(const entity_type entity) ENTT_NOEXCEPT {
+		return std::tuple<Component *...>{unpack<Component>(entity)...};
 	}
 
     /**
