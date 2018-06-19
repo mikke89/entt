@@ -738,27 +738,26 @@ public:
     }
 
 	/**
-	* @brief Returns a pointer to the given component for an entity, or nullptr
-	*        if invalid.
+	* @brief Returns a pointer to the given component for an entity if it owns one.
 	*
 	* @tparam Component Type of component to get.
 	* @param entity A valid entity identifier.
-	* @return A pointer to the component owned by the entity.
+	* @return A pointer to the component owned by the entity, or nullptr.
 	*/
 	template<typename Component>
 	const Component * get_if(const entity_type entity) const ENTT_NOEXCEPT {
-		if (!managed<Component>() || !valid(entity)) return nullptr;
+		assert(valid(entity));
+		if (!has<Component>(entity)) return nullptr;
 		auto& c = pool<Component>().get(entity);
 		return &c;
 	}
 
 	/**
-	* @brief Returns a pointer to the given component for an entity, or nullptr
-	*        if invalid.
+	* @brief Returns a pointer to the given component for an entity if it owns one.
 	*
 	* @tparam Component Type of component to get.
 	* @param entity A valid entity identifier.
-	* @return A pointer to the component owned by the entity.
+	* @return A pointer to the component owned by the entity, or nullptr.
 	*/
 	template<typename Component>
 	inline Component * get_if(const entity_type entity) ENTT_NOEXCEPT {
@@ -804,6 +803,32 @@ public:
     get(const entity_type entity) ENTT_NOEXCEPT {
         return std::tuple<Component &...>{get<Component>(entity)...};
     }
+
+	/**
+	* @brief Returns a pointer to the given component for an entity if it owns one.
+	*
+	* @tparam Component Type of components to get.
+	* @param entity A valid entity identifier.
+	* @return Pointers to the component owned by the entity, or nullptr.
+	*/
+	template<typename... Component>
+	inline std::enable_if_t<(sizeof...(Component) > 1), std::tuple<const Component *...>>
+	get_if(const entity_type entity) const ENTT_NOEXCEPT {
+		return std::tuple<const Component *...>{get_if<Component>(entity)...};
+	}
+
+	/**
+	* @brief Returns a pointer to the given component for an entity if it owns one.
+	*
+	* @tparam Component Type of components to get.
+	* @param entity A valid entity identifier.
+	* @return Pointers to the component owned by the entity, or nullptr.
+	*/
+	template<typename... Component>
+	inline std::enable_if_t<(sizeof...(Component) > 1), std::tuple<Component *...>>
+	get_if(const entity_type entity) ENTT_NOEXCEPT {
+		return std::tuple<Component *...>{get_if<Component>(entity)...};
+	}
 
     /**
      * @brief Replaces the given tag.

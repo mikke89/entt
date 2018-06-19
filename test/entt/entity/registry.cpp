@@ -193,12 +193,40 @@ TEST(DefaultRegistry, Functionalities) {
     ASSERT_EQ(registry.size<int>(), entt::DefaultRegistry::size_type{0});
     ASSERT_EQ(registry.size<char>(), entt::DefaultRegistry::size_type{0});
     ASSERT_TRUE(registry.empty<int>());
+}
 
-	const auto e6 = registry.create();
+TEST(DefaultRegistry, GetIf) {
+	entt::DefaultRegistry registry;
 
-	ASSERT_EQ(registry.get_if<long>(e0), nullptr);
-	ASSERT_EQ(registry.get_if<long>(e6), nullptr);
-	ASSERT_EQ(registry.get_if<long>(entt::null), nullptr);
+	const auto e0 = registry.create();
+	const auto e1 = registry.create();
+	const auto e2 = registry.create();
+
+	registry.assign<long>(e0);
+	registry.assign<int>(e1);
+	registry.assign<char>(e1);
+
+	ASSERT_TRUE(registry.get_if<long>(e0));
+	ASSERT_FALSE(registry.get_if<long>(e1));
+	ASSERT_FALSE(registry.get_if<long>(e2));
+
+	auto&[l0, i0, c0] = registry.get_if<long, int, char>(e0);
+
+	ASSERT_TRUE(l0);
+	ASSERT_FALSE(i0);
+	ASSERT_FALSE(c0);
+
+	auto&[l1, i1, c1] = registry.get_if<long, int, char>(e1);
+
+	ASSERT_FALSE(l1);
+	ASSERT_TRUE(i1);
+	ASSERT_TRUE(c1);
+
+	auto&[l2, i2, c2] = registry.get_if<long, int, char>(e2);
+
+	ASSERT_FALSE(l2);
+	ASSERT_FALSE(i2);
+	ASSERT_FALSE(c2);
 }
 
 TEST(DefaultRegistry, RawData) {
