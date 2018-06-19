@@ -449,7 +449,7 @@ public:
      *
      * @param entity A valid entity identifier.
      */
-    void destroy(const entity_type entity) {
+    void destroy(entity_type entity) {
         assert(valid(entity));
 
         for(auto pos = pools.size(); pos; --pos) {
@@ -499,9 +499,9 @@ public:
      * @tparam Component Types of components to use to search for the entities.
      * @tparam Type Type of view to use or empty to use a standard view.
      */
-    template<typename... Component, typename... Type>
-    void destroy(Type...) {
-        for(const auto entity: view<Component...>(Type{}...)) {
+    template<typename... Component>
+    void destroy() {
+        for(const auto entity: view<Component...>()) {
             destroy(entity);
         }
     }

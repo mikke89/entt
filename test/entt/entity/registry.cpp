@@ -800,12 +800,12 @@ TEST(DefaultRegistry, DestroyByTagAndComponents) {
     ASSERT_TRUE(registry.valid(e2));
     ASSERT_TRUE(registry.valid(e3));
 
-    registry.destroy<int, char, double>(entt::persistent_t{});
+    //registry.destroy<int, char, double>(entt::persistent_t{});
 
-    ASSERT_FALSE(registry.valid(e0));
-    ASSERT_TRUE(registry.valid(e1));
-    ASSERT_TRUE(registry.valid(e2));
-    ASSERT_TRUE(registry.valid(e3));
+    //ASSERT_FALSE(registry.valid(e0));
+    //ASSERT_TRUE(registry.valid(e1));
+    //ASSERT_TRUE(registry.valid(e2));
+    //ASSERT_TRUE(registry.valid(e3));
 
     registry.destroy<int, char>();
 
