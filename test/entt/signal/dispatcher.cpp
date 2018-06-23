@@ -38,3 +38,15 @@ TEST(Dispatcher, Functionalities) {
 
     ASSERT_EQ(receiver.cnt, 0);
 }
+
+TEST(Dispatcher, Disconnect) {
+	entt::Dispatcher dispatcher;
+	Receiver receiver;
+
+	dispatcher.template sink<AnEvent>().connect(&receiver);
+	dispatcher.template trigger<AnEvent>();
+	dispatcher.disconnect(&receiver);
+	dispatcher.template trigger<AnEvent>();
+
+	ASSERT_EQ(receiver.cnt, 1);
+}

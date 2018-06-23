@@ -41,6 +41,7 @@ class Dispatcher final {
     struct BaseSignalWrapper {
         virtual ~BaseSignalWrapper() = default;
         virtual void publish() = 0;
+		virtual void disconnect(void* instance) = 0;
     };
 
     template<typename Event>
@@ -67,6 +68,10 @@ class Dispatcher final {
         inline void enqueue(Args &&... args) {
             events[current].push_back({ std::forward<Args>(args)... });
         }
+
+		inline void disconnect(void* instance) {
+			signal.sink().disconnect<void>(instance);
+		}
 
     private:
         SigH<void(const Event &)> signal{};
@@ -176,6 +181,20 @@ public:
             }
         }
     }
+
+
+
+	/**
+	* @brief Disconnects all connections to the given instance.
+	*
+	* @tparam Class Type of the given instance.
+    * @param instance Pointer to the instance to disconnect.
+	*/
+	template<typename Class>
+	inline void disconnect(Class *instance) {
+		for (auto& wrapper : wrappers)
+			wrapper->disconnect(instance);
+	}
 
 private:
     std::vector<std::unique_ptr<BaseSignalWrapper>> wrappers;
