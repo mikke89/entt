@@ -39,9 +39,9 @@ class Snapshot final {
     /*! @brief A registry is allowed to create snapshots. */
     friend class Registry<Entity>;
 
-    using follow_fn_type = Entity(*)(const Registry<Entity> &, const Entity);
+    using follow_fn_type = Entity(const Registry<Entity> &, const Entity);
 
-    Snapshot(const Registry<Entity> &registry, Entity seed, follow_fn_type follow) ENTT_NOEXCEPT
+    Snapshot(const Registry<Entity> &registry, Entity seed, follow_fn_type *follow) ENTT_NOEXCEPT
         : registry{registry},
           seed{seed},
           follow{follow}
@@ -100,7 +100,7 @@ public:
      */
     template<typename Archive>
     const Snapshot & entities(Archive &archive) const {
-        archive(static_cast<Entity>(registry.size()));
+        archive(static_cast<Entity>(registry.alive()));
         registry.each([&archive](const auto entity) { archive(entity); });
         return *this;
     }
@@ -117,13 +117,17 @@ public:
      */
     template<typename Archive>
     const Snapshot & destroyed(Archive &archive) const {
-        auto size = registry.capacity() - registry.size();
+        auto size = registry.size() - registry.alive();
         archive(static_cast<Entity>(size));
-        auto curr = seed;
 
-        for(; size; --size) {
+        if(size) {
+            auto curr = seed;
             archive(curr);
-            curr = follow(registry, curr);
+
+            for(--size; size; --size) {
+                curr = follow(registry, curr);
+                archive(curr);
+            }
         }
 
         return *this;
@@ -243,7 +247,7 @@ public:
 private:
     const Registry<Entity> &registry;
     const Entity seed;
-    follow_fn_type follow;
+    follow_fn_type *follow;
 };
 
 
@@ -262,9 +266,9 @@ class SnapshotLoader final {
     /*! @brief A registry is allowed to create snapshot loaders. */
     friend class Registry<Entity>;
 
-    using assure_fn_type = void(*)(Registry<Entity> &, const Entity, const bool);
+    using assure_fn_type = void(Registry<Entity> &, const Entity, const bool);
 
-    SnapshotLoader(Registry<Entity> &registry, assure_fn_type assure_fn) ENTT_NOEXCEPT
+    SnapshotLoader(Registry<Entity> &registry, assure_fn_type *assure_fn) ENTT_NOEXCEPT
         : registry{registry},
           assure_fn{assure_fn}
     {
@@ -406,7 +410,7 @@ public:
 
 private:
     Registry<Entity> &registry;
-    assure_fn_type assure_fn;
+    assure_fn_type *assure_fn;
 };
 
 

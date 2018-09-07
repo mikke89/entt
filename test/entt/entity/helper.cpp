@@ -1,11 +1,12 @@
 #include <gtest/gtest.h>
+#include <entt/core/hashed_string.hpp>
 #include <entt/entity/helper.hpp>
 #include <entt/entity/registry.hpp>
 
-TEST(Dependency, Functionalities) {
+TEST(Helper, Dependency) {
     entt::DefaultRegistry registry;
     const auto entity = registry.create();
-    entt::dependency<double, float>(registry.construction<int>());
+    entt::connect<double, float>(registry.construction<int>());
 
     ASSERT_FALSE(registry.has<double>(entity));
     ASSERT_FALSE(registry.has<float>(entity));
@@ -41,9 +42,34 @@ TEST(Dependency, Functionalities) {
     registry.remove<int>(entity);
     registry.remove<double>(entity);
     registry.remove<float>(entity);
-    entt::dependency<double, float>(entt::break_t{}, registry.construction<int>());
+    entt::disconnect<double, float>(registry.construction<int>());
     registry.assign<int>(entity);
 
     ASSERT_FALSE(registry.has<double>(entity));
     ASSERT_FALSE(registry.has<float>(entity));
+}
+
+TEST(Helper, Label) {
+    entt::DefaultRegistry registry;
+    const auto entity = registry.create();
+    registry.assign<entt::label<"foobar"_hs>>(entity);
+    registry.assign<int>(entity, 42);
+    int counter{};
+
+    ASSERT_FALSE(registry.has<entt::label<"barfoo"_hs>>(entity));
+    ASSERT_TRUE(registry.has<entt::label<"foobar"_hs>>(entity));
+
+    for(auto entity: registry.view<int, entt::label<"foobar"_hs>>()) {
+        (void)entity;
+        ++counter;
+    }
+
+    ASSERT_NE(counter, 0);
+
+    for(auto entity: registry.view<entt::label<"foobar"_hs>>()) {
+        (void)entity;
+        --counter;
+    }
+
+    ASSERT_EQ(counter, 0);
 }

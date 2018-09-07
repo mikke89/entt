@@ -2,16 +2,16 @@
 # Doxygen configuration (documentation)
 #
 
-set(DOXY_SOURCE_DIRECTORY ${entt_SOURCE_DIR}/src)
-set(DOXY_DOCS_DIRECTORY ${entt_SOURCE_DIR}/docs)
-set(DOXY_OUTPUT_DIRECTORY ${entt_BINARY_DIR})
+set(DOXY_SOURCE_DIRECTORY ${EnTT_SOURCE_DIR}/src)
+set(DOXY_DOCS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+set(DOXY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-configure_file(doxy.in ${entt_BINARY_DIR}/doxy.cfg @ONLY)
+configure_file(doxy.in doxy.cfg @ONLY)
 
 add_custom_target(
     docs ALL
-    COMMAND ${DOXYGEN_EXECUTABLE} ${entt_BINARY_DIR}/doxy.cfg
-    WORKING_DIRECTORY ${entt_SOURCE_DIR}
+    COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doxy.cfg
+    WORKING_DIRECTORY ${EnTT_SOURCE_DIR}
     VERBATIM
     SOURCES doxy.in
 )
@@ -19,4 +19,18 @@ add_custom_target(
 install(
     DIRECTORY ${DOXY_OUTPUT_DIRECTORY}/html
     DESTINATION share/${PROJECT_NAME}-${PROJECT_VERSION}/
+)
+
+add_custom_target(
+    docs_aob
+    SOURCES
+        CONTRIBUTING.md
+        core.md
+        entity.md
+        locator.md
+        process.md
+        resource.md
+        shared.md
+        signal.md
+        extra.dox
 )

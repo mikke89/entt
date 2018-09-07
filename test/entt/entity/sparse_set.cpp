@@ -6,7 +6,9 @@ TEST(SparseSetNoType, Functionalities) {
     entt::SparseSet<std::uint64_t> set;
     const auto &cset = set;
 
-    ASSERT_NO_THROW(set.reserve(42));
+    set.reserve(42);
+
+    ASSERT_EQ(set.capacity(), 42);
     ASSERT_TRUE(set.empty());
     ASSERT_EQ(set.size(), 0u);
     ASSERT_EQ(cset.begin(), cset.end());
@@ -335,11 +337,29 @@ TEST(SparseSetNoType, RespectUnordered) {
     ASSERT_EQ(rhs.get(5), 5u);
 }
 
+TEST(SparseSetNoType, CanModifyDuringIteration) {
+    entt::SparseSet<std::uint64_t> set;
+    set.construct(0);
+
+    ASSERT_EQ(set.capacity(), entt::SparseSet<std::uint64_t>::size_type{1});
+
+    const auto it = set.cbegin();
+    set.reserve(entt::SparseSet<std::uint64_t>::size_type{2});
+
+    ASSERT_EQ(set.capacity(), entt::SparseSet<std::uint64_t>::size_type{2});
+
+    // this should crash with asan enabled if we break the constraint
+    const auto entity = *it;
+    (void)entity;
+}
+
 TEST(SparseSetWithType, Functionalities) {
     entt::SparseSet<std::uint64_t, int> set;
     const auto &cset = set;
 
-    ASSERT_NO_THROW(set.reserve(42));
+    set.reserve(42);
+
+    ASSERT_EQ(set.capacity(), 42);
     ASSERT_TRUE(set.empty());
     ASSERT_EQ(set.size(), 0u);
     ASSERT_EQ(cset.begin(), cset.end());
@@ -380,8 +400,8 @@ TEST(SparseSetWithType, Functionalities) {
     ASSERT_FALSE(set.has(0));
     ASSERT_FALSE(set.has(42));
 
-    (void)entt::SparseSet<std::uint64_t>{std::move(set)};
-    entt::SparseSet<std::uint64_t> other;
+    (void)entt::SparseSet<std::uint64_t, int>{std::move(set)};
+    entt::SparseSet<std::uint64_t, int> other;
     other = std::move(set);
 }
 
@@ -817,6 +837,22 @@ TEST(SparseSetWithType, RespectUnordered) {
     ASSERT_EQ(*(rhs.data() + 3u), 3u);
     ASSERT_EQ(*(rhs.data() + 4u), 4u);
     ASSERT_EQ(*(rhs.data() + 5u), 5u);
+}
+
+TEST(SparseSetWithType, CanModifyDuringIteration) {
+    entt::SparseSet<std::uint64_t, int> set;
+    set.construct(0, 42);
+
+    ASSERT_EQ(set.capacity(), entt::SparseSet<std::uint64_t>::size_type{1});
+
+    const auto it = set.cbegin();
+    set.reserve(entt::SparseSet<std::uint64_t>::size_type{2});
+
+    ASSERT_EQ(set.capacity(), entt::SparseSet<std::uint64_t>::size_type{2});
+
+    // this should crash with asan enabled if we break the constraint
+    const auto entity = *it;
+    (void)entity;
 }
 
 TEST(SparseSetWithType, ReferencesGuaranteed) {
