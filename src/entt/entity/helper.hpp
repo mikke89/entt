@@ -26,8 +26,8 @@ namespace entt {
  * @param registry A valid reference to a registry.
  * @param entity A valid entity identifier.
  */
-template<typename Entity, typename... Component>
-void dependency(Registry<Entity> &registry, const Entity entity) {
+template<typename Comp, typename Entity, typename... Component>
+void dependency(Registry<Entity> &registry, const Entity entity, const Comp&) {
     using accumulator_type = int[];
     accumulator_type accumulator = { ((registry.template has<Component>(entity) ? void() : (registry.template assign<Component>(entity), void())), 0)... };
     (void)accumulator;
@@ -51,9 +51,9 @@ void dependency(Registry<Entity> &registry, const Entity entity) {
  * @tparam Entity A valid entity type (see entt_traits for more details).
  * @param sink A sink object properly initialized.
  */
-template<typename... Dependency, typename Entity>
-inline void connect(Sink<void(Registry<Entity> &, const Entity)> sink) {
-    sink.template connect<dependency<Entity, Dependency...>>();
+template<typename... Dependency, typename Entity, typename Comp>
+inline void connect(Sink<void(Registry<Entity> &, const Entity, const Comp&)> sink) {
+    sink.template connect<dependency<Comp, Entity, Dependency...>>();
 }
 
 
@@ -74,9 +74,9 @@ inline void connect(Sink<void(Registry<Entity> &, const Entity)> sink) {
  * @tparam Entity A valid entity type (see entt_traits for more details).
  * @param sink A sink object properly initialized.
  */
-template<typename... Dependency, typename Entity>
-inline void disconnect(Sink<void(Registry<Entity> &, const Entity)> sink) {
-    sink.template disconnect<dependency<Entity, Dependency...>>();
+template<typename... Dependency, typename Entity, typename Comp>
+inline void disconnect(Sink<void(Registry<Entity> &, const Entity, const Comp&)> sink) {
+    sink.template disconnect<dependency<Comp, Entity, Dependency...>>();
 }
 
 

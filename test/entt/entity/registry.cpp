@@ -8,7 +8,7 @@
 
 struct Listener {
     template<typename Component>
-    void incrComponent(entt::DefaultRegistry &registry, entt::DefaultRegistry::entity_type entity) {
+    void incrComponent(entt::DefaultRegistry &registry, entt::DefaultRegistry::entity_type entity, const Component&) {
         ASSERT_TRUE(registry.valid(entity));
         ASSERT_TRUE(registry.has<Component>(entity));
         last = entity;
@@ -25,7 +25,7 @@ struct Listener {
     }
 
     template<typename Component>
-    void decrComponent(entt::DefaultRegistry &registry, entt::DefaultRegistry::entity_type entity) {
+    void decrComponent(entt::DefaultRegistry &registry, entt::DefaultRegistry::entity_type entity, const Component&) {
         ASSERT_TRUE(registry.valid(entity));
         ASSERT_TRUE(registry.has<Component>(entity));
         last = entity;

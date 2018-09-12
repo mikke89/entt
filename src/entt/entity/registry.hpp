@@ -48,6 +48,8 @@ class Registry {
 
     template<typename Component>
     struct Pool: SparseSet<Entity, Component> {
+		using signal_comp_type = SigH<void(Registry &, const Entity, const Component&)>;
+
         Pool(Registry *registry) ENTT_NOEXCEPT
             : registry{registry}
         {}
@@ -55,27 +57,27 @@ class Registry {
         template<typename... Args>
         Component & construct(const Entity entity, Args &&... args) {
             auto &component = SparseSet<Entity, Component>::construct(entity, std::forward<Args>(args)...);
-            ctor.publish(*registry, entity);
+            ctor.publish(*registry, entity, component);
             return component;
         }
 
         void destroy(const Entity entity) override {
-            dtor.publish(*registry, entity);
+            if(!dtor.empty()) dtor.publish(*registry, entity, SparseSet<Entity, Component>::get(entity));
             SparseSet<Entity, Component>::destroy(entity);
         }
 
-        typename signal_type::sink_type construction() ENTT_NOEXCEPT {
+        typename signal_comp_type::sink_type construction() ENTT_NOEXCEPT {
             return ctor.sink();
         }
 
-        typename signal_type::sink_type destruction() ENTT_NOEXCEPT {
+        typename signal_comp_type::sink_type destruction() ENTT_NOEXCEPT {
             return dtor.sink();
         }
 
     private:
         Registry *registry;
-        signal_type ctor;
-        signal_type dtor;
+		signal_comp_type ctor;
+		signal_comp_type dtor;
     };
 
     template<typename Tag>
@@ -118,15 +120,15 @@ class Registry {
         signal_type dtor;
     };
 
-    template<typename handler_family::family_type(*Type)(), typename... Component>
-    static void creating(Registry &registry, const Entity entity) {
+    template<typename Comp, typename handler_family::family_type(*Type)(), typename... Component>
+    static void creating(Registry &registry, const Entity entity, const Comp&) {
         if(registry.has<Component...>(entity)) {
             registry.handlers[Type()]->construct(entity);
         }
     }
 
-    template<typename... Component>
-    static void destroying(Registry &registry, const Entity entity) {
+    template<typename Comp, typename... Component>
+    static void destroying(Registry &registry, const Entity entity, const Comp&) {
         auto &handler = *registry.handlers[handler_family::type<Component...>()];
         return handler.has(entity) ? handler.destroy(entity) : void();
     }
@@ -167,8 +169,8 @@ class Registry {
 
     template<typename Comp, std::size_t Pivot, typename... Component, std::size_t... Indexes>
     void connect(std::index_sequence<Indexes...>) {
-        pool<Comp>().construction().template connect<&Registry::creating<&handler_family::type<Component...>, std::tuple_element_t<(Indexes < Pivot ? Indexes : (Indexes+1)), std::tuple<Component...>>...>>();
-        pool<Comp>().destruction().template connect<&Registry::destroying<Component...>>();
+        pool<Comp>().construction().template connect<&Registry::creating<Comp,&handler_family::type<Component...>, std::tuple_element_t<(Indexes < Pivot ? Indexes : (Indexes+1)), std::tuple<Component...>>...>>();
+        pool<Comp>().destruction().template connect<&Registry::destroying<Comp, Component...>>();
     }
 
     template<typename... Component, std::size_t... Indexes>
@@ -180,8 +182,8 @@ class Registry {
 
     template<typename Comp, std::size_t Pivot, typename... Component, std::size_t... Indexes>
     void disconnect(std::index_sequence<Indexes...>) {
-        pool<Comp>().construction().template disconnect<&Registry::creating<&handler_family::type<Component...>, std::tuple_element_t<(Indexes < Pivot ? Indexes : (Indexes+1)), std::tuple<Component...>>...>>();
-        pool<Comp>().destruction().template disconnect<&Registry::destroying<Component...>>();
+        pool<Comp>().construction().template disconnect<&Registry::creating<Comp,&handler_family::type<Component...>, std::tuple_element_t<(Indexes < Pivot ? Indexes : (Indexes+1)), std::tuple<Component...>>...>>();
+        pool<Comp>().destruction().template disconnect<&Registry::destroying<Comp, Component...>>();
     }
 
     template<typename... Component, std::size_t... Indexes>
@@ -1106,7 +1108,7 @@ public:
      * @return A temporary sink object.
      */
     template<typename Component>
-    sink_type construction() ENTT_NOEXCEPT {
+    typename Pool<Component>::signal_comp_type::sink_type construction() ENTT_NOEXCEPT {
         assure<Component>();
         return pool<Component>().construction();
     }
@@ -1164,7 +1166,7 @@ public:
      * @return A temporary sink object.
      */
     template<typename Component>
-    sink_type destruction() ENTT_NOEXCEPT {
+	typename Pool<Component>::signal_comp_type::sink_type destruction() ENTT_NOEXCEPT {
         assure<Component>();
         return pool<Component>().destruction();
     }
