@@ -201,7 +201,7 @@ public:
             helper_type::size,
             &helper_type::arg,
             [](meta_any * const any) {
-                return internal::invoke<Func>(nullptr, any, std::make_index_sequence<helper_type::size>{});
+                return internal::invoke<Type, Func>(nullptr, any, std::make_index_sequence<helper_type::size>{});
             },
             []() {
                 static meta_ctor meta{&node};
@@ -368,7 +368,7 @@ public:
             &internal::meta_info<typename func_type<Func>::return_type>::resolve,
             &func_type<Func>::arg,
             [](meta_handle handle, meta_any *any) {
-                return internal::invoke<Func>(handle, any, std::make_index_sequence<func_type<Func>::size>{});
+                return internal::invoke<Type, Func>(handle, any, std::make_index_sequence<func_type<Func>::size>{});
             },
             []() {
                 static meta_func meta{&node};

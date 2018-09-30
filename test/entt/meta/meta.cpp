@@ -81,6 +81,25 @@ struct not_comparable_type {
 
 bool operator!=(const not_comparable_type &, const not_comparable_type &) = delete;
 
+struct an_abstract_type {
+    virtual ~an_abstract_type() = default;
+    void f(int v) { i = v; }
+    virtual void g(int) = 0;
+    int i{};
+};
+
+struct another_abstract_type {
+    virtual ~another_abstract_type() = default;
+    virtual void h(char) = 0;
+    char j{};
+};
+
+struct concrete_type: an_abstract_type, another_abstract_type {
+    void f(int v) { i = v*v; } // hide, it's ok :-)
+    void g(int v) override { i = -v; }
+    void h(char c) override { j = c; }
+};
+
 struct Meta: public ::testing::Test {
     static void SetUpTestCase() {
         entt::reflect<double>().conv<int>();
@@ -115,6 +134,20 @@ struct Meta: public ::testing::Test {
                 .func<&func_type::g>("g", std::make_pair(properties::prop_bool, false))
                 .func<&func_type::h>("h", std::make_pair(properties::prop_bool, false))
                 .func<&func_type::k>("k", std::make_pair(properties::prop_bool, false));
+
+        entt::reflect<an_abstract_type>("an_abstract_type", std::make_pair(properties::prop_bool, false))
+                .data<&an_abstract_type::i>("i")
+                .func<&an_abstract_type::f>("f")
+                .func<&an_abstract_type::g>("g");
+
+        entt::reflect<another_abstract_type>("another_abstract_type", std::make_pair(properties::prop_int, 42))
+                .data<&another_abstract_type::j>("j")
+                .func<&another_abstract_type::h>("h");
+
+        entt::reflect<concrete_type>("concrete")
+                .base<an_abstract_type>()
+                .base<another_abstract_type>()
+                .func<&concrete_type::f>("f");
     }
 
     void SetUp() override {
@@ -1174,42 +1207,112 @@ TEST_F(Meta, MetaTypeDestroyDtor) {
     auto *type = entt::resolve<empty_type>();
 
     ASSERT_EQ(empty_type::counter, 0);
-    type->destroy(empty_type{});
+    ASSERT_TRUE(type->destroy(empty_type{}));
     ASSERT_EQ(empty_type::counter, 1);
 }
 
 TEST_F(Meta, MetaTypeDestroyDtorInvalidArg) {
-    // TODO
+    auto *type = entt::resolve<empty_type>();
+
+    ASSERT_EQ(empty_type::counter, 0);
+    ASSERT_FALSE(type->destroy('c'));
+    ASSERT_EQ(empty_type::counter, 0);
+}
+
+TEST_F(Meta, MetaTypeDestroyDtorCastAndConvert) {
+    auto *type = entt::resolve<empty_type>();
+
+    ASSERT_EQ(empty_type::counter, 0);
+    ASSERT_FALSE(type->destroy(fat_type{}));
+    ASSERT_EQ(empty_type::counter, 0);
+    ASSERT_FALSE(entt::resolve<int>()->destroy(42.));
 }
 
 TEST_F(Meta, MetaTypeDestroyNoDtor) {
-    // TODO
+    auto *type = entt::resolve<char>();
+    ASSERT_TRUE(type->destroy('c'));
 }
 
 TEST_F(Meta, MetaTypeDestroyNoDtorInvalidArg) {
-    // TODO
+    auto *type = entt::resolve<char>();
+    ASSERT_FALSE(type->destroy(42));
 }
 
 TEST_F(Meta, MetaTypeDestroyNoDtorVoid) {
-    // TODO
+    auto *type = entt::resolve<void>();
+    ASSERT_FALSE(type->destroy({}));
 }
 
-TEST_F(Meta, MetaTypeDestroyNoDtorVoidInvalidArg) {
-    // TODO
+TEST_F(Meta, MetaTypeDestroyNoDtorCastAndConvert) {
+    auto *type = entt::resolve<int>();
+    ASSERT_FALSE(type->destroy(42.));
 }
 
 TEST_F(Meta, MetaDataFromBase) {
-    // TODO
+    auto *type = entt::resolve<concrete_type>();
+    concrete_type instance;
+
+    ASSERT_NE(type->data("i"), nullptr);
+    ASSERT_NE(type->data("j"), nullptr);
+
+    ASSERT_EQ(instance.i, 0);
+    ASSERT_EQ(instance.j, char{});
+    ASSERT_TRUE(type->data("i")->set(instance, 3));
+    ASSERT_TRUE(type->data("j")->set(instance, 'c'));
+    ASSERT_EQ(instance.i, 3);
+    ASSERT_EQ(instance.j, 'c');
 }
 
 TEST_F(Meta, MetaFuncFromBase) {
-    // TODO
+    auto *type = entt::resolve<concrete_type>();
+    auto *base = entt::resolve<an_abstract_type>();
+    concrete_type instance;
+
+    ASSERT_NE(type->func("f"), nullptr);
+    ASSERT_NE(type->func("g"), nullptr);
+    ASSERT_NE(type->func("h"), nullptr);
+
+    ASSERT_EQ(type->func("f")->parent(), entt::resolve<concrete_type>());
+    ASSERT_EQ(type->func("g")->parent(), entt::resolve<an_abstract_type>());
+    ASSERT_EQ(type->func("h")->parent(), entt::resolve<another_abstract_type>());
+
+    ASSERT_EQ(instance.i, 0);
+    ASSERT_EQ(instance.j, char{});
+
+    type->func("f")->invoke(instance, 3);
+    type->func("h")->invoke(instance, 'c');
+
+    ASSERT_EQ(instance.i, 9);
+    ASSERT_EQ(instance.j, 'c');
+
+    base->func("g")->invoke(instance, 3);
+
+    ASSERT_EQ(instance.i, -3);
 }
 
 TEST_F(Meta, MetaPropFromBase) {
-    // TODO
+    auto *type = entt::resolve<concrete_type>();
+    auto *prop_bool = type->prop(properties::prop_bool);
+    auto *prop_int = type->prop(properties::prop_int);
+
+    ASSERT_NE(prop_bool, nullptr);
+    ASSERT_NE(prop_int, nullptr);
+
+    ASSERT_FALSE(prop_bool->value().cast<bool>());
+    ASSERT_EQ(prop_int->value().cast<int>(), 42);
 }
 
 TEST_F(Meta, AbstractClass) {
-    //TODO
+    auto *type = entt::resolve<an_abstract_type>();
+    concrete_type instance;
+
+    ASSERT_EQ(instance.i, 0);
+
+    type->func("f")->invoke(instance, 3);
+
+    ASSERT_EQ(instance.i, 3);
+
+    type->func("g")->invoke(instance, 3);
+
+    ASSERT_EQ(instance.i, -3);
 }

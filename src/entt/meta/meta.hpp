@@ -1667,6 +1667,7 @@ bool setter([[maybe_unused]] meta_handle handle, [[maybe_unused]] meta_any &any)
         return false;
     } else if constexpr(std::is_member_object_pointer_v<decltype(Data)>) {
         using data_type = std::decay_t<decltype(std::declval<Type>().*Data)>;
+        static_assert(std::is_invocable_v<decltype(Data), Type>);
         const bool accepted = any.can_cast<data_type>() || any.convert<data_type>();
         auto *clazz = handle.try_cast<Type>();
 
@@ -1691,6 +1692,7 @@ bool setter([[maybe_unused]] meta_handle handle, [[maybe_unused]] meta_any &any)
 template<typename Type, auto Data>
 inline meta_any getter([[maybe_unused]] meta_handle handle) {
     if constexpr(std::is_member_object_pointer_v<decltype(Data)>) {
+        static_assert(std::is_invocable_v<decltype(Data), Type>);
         auto *clazz = handle.try_cast<Type>();
         return clazz ? meta_any{clazz->*Data} : meta_any{};
     } else {
@@ -1699,7 +1701,7 @@ inline meta_any getter([[maybe_unused]] meta_handle handle) {
 }
 
 
-template<auto Func, std::size_t... Indexes>
+template<typename Type, auto Func, std::size_t... Indexes>
 std::enable_if_t<std::is_function_v<std::remove_pointer_t<decltype(Func)>>, meta_any>
 invoke(const meta_handle &, meta_any *args, std::index_sequence<Indexes...>) {
     using helper_type = meta_function_helper<std::integral_constant<decltype(Func), Func>>;
@@ -1719,11 +1721,12 @@ invoke(const meta_handle &, meta_any *args, std::index_sequence<Indexes...>) {
 }
 
 
-template<auto Member, std::size_t... Indexes>
+template<typename Type, auto Member, std::size_t... Indexes>
 std::enable_if_t<std::is_member_function_pointer_v<decltype(Member)>, meta_any>
 invoke(meta_handle &handle, meta_any *args, std::index_sequence<Indexes...>) {
     using helper_type = meta_function_helper<std::integral_constant<decltype(Member), Member>>;
-    auto *clazz = handle.try_cast<typename helper_type::class_type>();
+    static_assert(std::is_base_of_v<typename helper_type::class_type, Type>);
+    auto *clazz = handle.try_cast<Type>();
     meta_any any{};
 
     if(clazz && (((args+Indexes)->can_cast<typename helper_type::template arg_type<Indexes>>()
