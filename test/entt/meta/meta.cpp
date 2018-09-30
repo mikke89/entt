@@ -1133,6 +1133,7 @@ TEST_F(Meta, MetaTypeCtor) {
 
     ASSERT_EQ(counter, 2);
     ASSERT_NE((type->ctor<const base_type &, int>()), nullptr);
+    ASSERT_NE((type->ctor<const derived_type &, double>()), nullptr);
 }
 
 TEST_F(Meta, MetaTypeDtor) {

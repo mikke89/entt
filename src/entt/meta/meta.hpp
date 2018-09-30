@@ -283,13 +283,11 @@ const Type * try_cast(const meta_type_node *node, void *instance) ENTT_NOEXCEPT 
 }
 
 
-template<typename Type, auto Member>
-bool can_cast_or_convert(const meta_type_node *node) ENTT_NOEXCEPT {
-    const auto *type = meta_info<Type>::resolve();
-
-    return (node == type) || find_if<Member>([type](auto *node) {
-        return node->type() == type;
-    }, node);
+template<auto Member>
+inline bool can_cast_or_convert(const meta_type_node *from, const meta_type_node *to) ENTT_NOEXCEPT {
+    return (from == to) || find_if<Member>([to](auto *node) {
+        return node->type() == to;
+    }, from);
 }
 
 
@@ -478,7 +476,8 @@ public:
      */
     template<typename Type>
     inline bool can_cast() const ENTT_NOEXCEPT {
-        return internal::can_cast_or_convert<Type, &internal::meta_type_node::base>(node);
+        const auto *type = internal::meta_info<Type>::resolve();
+        return internal::can_cast_or_convert<&internal::meta_type_node::base>(node, type);
     }
 
     /**
@@ -527,7 +526,8 @@ public:
      */
     template<typename Type>
     inline bool can_convert() const ENTT_NOEXCEPT {
-        return internal::can_cast_or_convert<Type, &internal::meta_type_node::conv>(node);
+        const auto *type = internal::meta_info<Type>::resolve();
+        return internal::can_cast_or_convert<&internal::meta_type_node::conv>(node, type);
     }
 
     /**
@@ -1329,8 +1329,10 @@ class meta_type final {
     inline auto ctor(std::index_sequence<Indexes...>) const ENTT_NOEXCEPT {
         return internal::find_if([](auto *node) {
             return node->size == sizeof...(Args) &&
-                    ((internal::can_cast_or_convert<Args, &internal::meta_type_node::base>(node->arg(Indexes))
-                      || internal::can_cast_or_convert<Args, &internal::meta_type_node::conv>(node->arg(Indexes))) && ...);
+                    (([](auto *from, auto *to) {
+                        return internal::can_cast_or_convert<&internal::meta_type_node::base>(from, to)
+                                || internal::can_cast_or_convert<&internal::meta_type_node::conv>(from, to);
+                    }(internal::meta_info<Args>::resolve(), node->arg(Indexes))) && ...);
         }, node->ctor);
     }
 
