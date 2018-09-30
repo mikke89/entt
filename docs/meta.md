@@ -23,7 +23,7 @@ the specific case of `EnTT`, a tool that can unlock a lot of other features. I
 looked for a third-party library that met my needs on the subject, but I always
 came across some details that I didn't like: macros, being intrusive, too many
 allocations. In one word: unsatisfactory.<br/>
-I finally decided to write a, non-intrusive and macro-free runtime built-in
+I finally decided to write a built-in, non-intrusive and macro-free runtime
 reflection system for `EnTT. Maybe I didn't do better than others or maybe yes,
 time will tell me, but at least I can model this tool around the library to
 which it belongs and not vice versa.
@@ -39,86 +39,99 @@ To _reflect_ a type, the library provides the `reflect` function:
 auto factory = entt::reflect<my_type>("reflected_type");
 ```
 
-It accepts the type to reflect as a template parameter and the name to give it
-once reflected as an argument. Names are important because users will be able to
-access meta types at runtime by searching for them by name. The returned value
-is a factory object to use to continue building the meta type.
+It accepts the type to reflect as a template parameter and an optional name as
+an argument. Names are important because users can retrieve meta types at
+runtime by searching for them by name. However, there are cases in which users
+can be interested in adding features to a reflected type so that the reflection
+system can use it correctly under the hood, but they don't want to allow
+searching the type by name.<br/>
+In both cases, the returned value is a factory object to use to continue
+building the meta type.
 
-Let's consider now the following type and declarations:
+A factory is such that all its member functions returns the factory itself.
+It can be used to extend the reflected type and add the following:
 
-```cpp
-struct my_type {
-    my_type(int);
+* _Constructors_. Actual constructors can be assigned to a reflected type by
+  specifying their list of arguments. Free functions (namely, factories) can be
+  used as well, as long as the return type is the expected one. From a client's
+  point of view, nothing changes if a constructor is a free function or an
+  actual constructor.<br/>
+  Use the `ctor` member function for this purpose:
 
-    int value;
-    static double cvalue;
+  ```cpp
+  entt::reflect<my_type>("reflected").ctor<int, char>().ctor<&factory>();
+  ```
 
-    void func();
-    static void cfunc();
-};
+* _Destructors_. Free functions can be set as destructors of reflected types.
+  The purpose is to give users the ability to free up resources that require
+  special treatment  before an object is actually destroyed.<br/>
+  Use the `dtor` member function for this purpose:
 
-my_type my_ctor(const char *);
-void my_dtor(my_type &);
-```
+  ```cpp
+  entt::reflect<my_type>("reflected").dtor<&destroy>();
+  ```
 
-Actual constructors can be assigned to a meta type by specifying their list of
-arguments. As a constructor, free functions can also be used, as well as for
-destructors. From a client's point of view, nothing changes if constructors and
-destructors are free functions or actual constructors and destructors.<br/>
-Starting from the previously defined type, we therefore have the following:
+* _Data members_. Both real data members of the underlying type and static or
+  global variables can be attached to a meta type. From a client's point of
+  view, all the variables associated with the reflected type will appear as if
+  they were part of the type.<br/>
+  Use the `data` member function for this purpose:
 
-```cpp
-entt::reflect<my_type>("reflected_type")
-    .ctor<int>()
-    .ctor<&my_ctor>()
-    .dtor<&my_dtor>();
-```
+  ```cpp
+  entt::reflect<my_type>("reflected")
+      .data<&my_type::static_variable>("static")
+      .data<&my_type::data_member>("member")
+      .data<&global_variable>("global");
+  ```
 
-Meta data of a meta type can be both real data members of the underlying type
-and static or global variables. From a client's point of view, all the variables
-associated with the reflected object will appear as if they were part of the
-type.<br/>
-Starting from the previously defined type, we therefore have the following:
+  This function requires as an argument the name to give to the meta data once
+  created. Users can then access meta data at runtime by searching for them by
+  name.
 
-```cpp
-entt::reflect<my_type>("reflected_type")
-    .ctor<int>()
-    .ctor<&my_ctor>()
-    .dtor<&my_dtor>()
-    .data<&my_type::value>("value")
-    .data<&my_type::cvalue>("cvalue");
-```
+* _Member functions_. Both real member functions of the underlying type and free
+  functions can be attached to a meta type. From a client's point of view, all
+  the functions associated with the reflected type will appear as if they were
+  part of the type.<br/>
+  Use the `func` member function for this purpose:
 
-The `data` member function of a factory accepts the name to give to the meta
-data once created as an argument. Names are important because users will be able
-to access meta data at runtime by searching for them by name.
+  ```cpp
+  entt::reflect<my_type>("reflected")
+      .func<&my_type::static_function>("static")
+      .func<&my_type::member_function>("member")
+      .func<&free_function>("free");
+  ```
 
-Meta functions of a meta type can be both real member functions of the
-underlying type and free functions. From a client's point of view, all the
-functions associated with the reflected object will appear as if they were part
-of the type.<br/>
-Starting from the previously defined type, we therefore have the following:
+  This function requires as an argument the name to give to the meta function
+  once created. Users can then access meta functions at runtime by searching for
+  them by name.
 
-```cpp
-entt::reflect<my_type>("reflected_type")
-    .ctor<int>()
-    .ctor<&my_ctor>()
-    .dtor<&my_dtor>()
-    .data<&my_type::value>("value")
-    .data<&my_type::cvalue>("cvalue")
-    .func<&my_type::func>("func")
-    .func<&my_type::cfunc>("cfunc");
-```
+* _Base classes_. A base class is such that the underlying type is actually
+  derived from it. In this case, the reflection system tracks the relationship
+  and allows for implicit casts at runtime when required.<br/>
+  Use the `base` member function for this purpose:
 
-The `func` member function of a factory accepts the name to give to the meta
-function once created as an argument. Names are important because users will be
-able to access meta functions at runtime by searching for them by name.
+  ```cpp
+  entt::reflect<derived_type>("derived").base<base_type>();
+  ```
+
+  From now on, wherever a `my_base_type` is required, an instance of `my_type`
+  will also be accepted.
+
+* _Conversion functions_. Actual types can be converted, this is a fact. Just
+  think of the relationship between a `double` and an `int` to see it. Similar
+  to bases, conversion functions allow users to define conversions that will be
+  implicitly performed by the reflection system when required.<br/>
+  Use the `conv` member function for this purpose:
+
+  ```cpp
+  entt::reflect<double>().conv<int>();
+  ```
 
 That's all, everything users need to create meta types and enjoy the reflection
 system. At first glance it may not seem that much, but users usually learn to
 appreciate it over time.<br/>
-Also, do not forget what these few lines hide under the hood: a non-intrusive
-and macro-free built-in runtime system for reflection in C++. Features that are
+Also, do not forget what these few lines hide under the hood: a built-in,
+non-intrusive and macro-free system for reflection in C++. Features that are
 definitely worth the price, at least for me.
 
 # Any as in any type
@@ -127,19 +140,39 @@ The reflection system comes with its own meta any type. It may seem redundant
 since C++17 introduced `std::any`, but it is not.<br/>
 In fact, the _type_ returned by an `std::any` is a const reference to an
 `std::type_info`, an implementation defined class that's not something everyone
-wants to see in their software. Furthermore, the class `std::type_info` suffers
-from some design flaws and there is no way to _convert_ an `std::type_info` into
+wants to see in a software. Furthermore, the class `std::type_info` suffers from
+some design flaws and there is even no way to _convert_ an `std::type_info` into
 a meta type, thus linking the two worlds.
 
 A meta any object provides an API similar to that of its most famous counterpart
 and serves the same purpose of being an opaque container for any type of
 value.<br/>
-The `type` member function returns a pointer to the meta type of the contained
-value, if any. On the other side, the `to` and the `data` member functions can
-be used to retrieve either a reference or a pointer to that value. Some other
-functions to know if the object can be converted to a given type and, therefore,
-to implicitly convert it, complete the offer of this class.<br/>
-Refer to the inline documentation for all the details.
+It minimizes the allocations required, which are almost absent thanks to _SBO_
+techniques. In fact, unless users deal with _fat types_ and create instances of
+them though the reflection system, allocations are at zero.
+
+A meta any object can be created by any other object or as an empty container
+to initialize later:
+
+```cpp
+// a meta any object that contains an int
+entt::meta_any any{0};
+
+// an empty meta any object
+entt::meta_any empty{};
+```
+
+It can be constructed or assigned by copy and move and it takes the burden of
+destroying the contained object when required.<br/>
+A meta any object has a `type` member function that returns a pointer to the
+meta type of the contained value, if any. The member functions `can_cast` and
+`can_convert` are used to know if the underlying object has a given type as a
+base or if it can be converted implicitly to it. Similarly, `cast` and `convert`
+do what they promise and return the expected value.
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+TODO
 
 # Enjoy the runtime
 

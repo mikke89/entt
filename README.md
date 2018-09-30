@@ -64,7 +64,7 @@ Here is a brief, yet incomplete list of what it offers today:
   **actor class** for those who aren't confident with the architecture and so
   on).
 * The smallest and most basic implementation of a **service locator** ever seen.
-* A non-intrusive and macro-free built-in **runtime reflection system**.
+* A built-in, non-intrusive and macro-free **runtime reflection system**.
 * A **cooperative scheduler** for processes of any type.
 * All what is needed for **resource management** (cache, loaders, handles).
 * **Delegates**, **signal handlers** (with built-in support for collectors) and

@@ -21,3 +21,4 @@
 * add a note about multithreading support to the README file
 * signals on entity creation/destruction
 * flexible views with "composable" filters
+* add https://github.com/Kerndog73/EnTT-Pacman to entt in action
