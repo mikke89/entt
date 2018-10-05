@@ -871,6 +871,35 @@ public:
 		return const_cast<Component *>(const_cast<const Registry *>(this)->unpack<Component>(entity));
 	}
 
+	/**
+	* @brief Safe access to components owned by an entity,
+	*
+	* @tparam Component Type of components to get.
+	* @param entity An entity identifier, valid or not.
+	* @return Pointers to the components owned by the entity, or nullptr if entity
+	*   is invalid or does not own the given component type.
+	*/
+	template<typename Component>
+	const Component * safe_unpack(const entity_type entity) const ENTT_NOEXCEPT {
+		if (!valid(entity)) return nullptr;
+		if (!has<Component>(entity)) return nullptr;
+		auto& c = pool<Component>().get(entity);
+		return &c;
+	}
+
+	/**
+	* @brief Safe access to components owned by an entity,
+	*
+	* @tparam Component Type of components to get.
+	* @param entity An entity identifier, valid or not.
+	* @return Pointers to the components owned by the entity, or nullptr if entity
+	*   is invalid or does not own the given component type.
+	*/
+	template<typename Component>
+	inline Component * safe_unpack(const entity_type entity) ENTT_NOEXCEPT {
+		return const_cast<Component *>(const_cast<const Registry *>(this)->safe_unpack<Component>(entity));
+	}
+
     /**
      * @brief Returns a reference to the given components for an entity.
      *
@@ -935,6 +964,34 @@ public:
 	inline std::enable_if_t<(sizeof...(Component) > 1), std::tuple<Component *...>>
 	unpack(const entity_type entity) ENTT_NOEXCEPT {
 		return std::tuple<Component *...>{unpack<Component>(entity)...};
+	}
+
+	/**
+	* @brief Safe access to components owned by an entity,
+	*
+	* @tparam Component Type of components to get.
+	* @param entity An entity identifier, valid or not.
+	* @return Pointers to the components owned by the entity, or nullptr if entity
+	*   is invalid or does not own the given component type.
+	*/
+	template<typename... Component>
+	inline std::enable_if_t<(sizeof...(Component) > 1), std::tuple<const Component *...>>
+		safe_unpack(const entity_type entity) const ENTT_NOEXCEPT {
+		return std::tuple<const Component *...>{safe_unpack<Component>(entity)...};
+	}
+
+	/**
+	* @brief Safe access to components owned by an entity,
+	*
+	* @tparam Component Type of components to get.
+	* @param entity An entity identifier, valid or not.
+	* @return Pointers to the components owned by the entity, or nullptr if entity
+	*   is invalid or does not own the given component type.
+	*/
+	template<typename... Component>
+	inline std::enable_if_t<(sizeof...(Component) > 1), std::tuple<Component *...>>
+		safe_unpack(const entity_type entity) ENTT_NOEXCEPT {
+		return std::tuple<Component *...>{safe_unpack<Component>(entity)...};
 	}
 
     /**
