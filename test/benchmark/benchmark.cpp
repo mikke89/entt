@@ -124,7 +124,7 @@ TEST(Benchmark, IterateSingleComponentRaw1M) {
 
     auto test = [&registry](auto func) {
         Timer timer;
-        registry.view<Position>(entt::raw_t{}).each(func);
+        registry.raw_view<Position>().each(func);
         timer.elapsed();
     };
 
@@ -256,7 +256,7 @@ TEST(Benchmark, IterateTwoComponentsPersistent1M) {
 
     auto test = [&registry](auto func) {
         Timer timer;
-        registry.view<Position, Velocity>(entt::persistent_t{}).each(func);
+        registry.persistent_view<Position, Velocity>().each(func);
         timer.elapsed();
     };
 
@@ -463,7 +463,7 @@ TEST(Benchmark, IterateFiveComponentsPersistent1M) {
 
     auto test = [&registry](auto func) {
         Timer timer;
-        registry.view<Position, Velocity, Comp<1>, Comp<2>, Comp<3>>(entt::persistent_t{}).each(func);
+        registry.persistent_view<Position, Velocity, Comp<1>, Comp<2>, Comp<3>>().each(func);
         timer.elapsed();
     };
 
@@ -726,7 +726,7 @@ TEST(Benchmark, IterateTenComponentsPersistent1M) {
 
     auto test = [&registry](auto func) {
         Timer timer;
-        registry.view<Position, Velocity, Comp<1>, Comp<2>, Comp<3>, Comp<4>, Comp<5>, Comp<6>, Comp<7>, Comp<8>>(entt::persistent_t{}).each(func);
+        registry.persistent_view<Position, Velocity, Comp<1>, Comp<2>, Comp<3>, Comp<4>, Comp<5>, Comp<6>, Comp<7>, Comp<8>>().each(func);
         timer.elapsed();
     };
 

@@ -1610,7 +1610,7 @@ public:
      * @return A newly created persistent view.
      */
     template<typename... Component>
-    PersistentView<Entity, Component...> view(persistent_t) {
+    PersistentView<Entity, Component...> persistent_view() {
         prepare<Component...>();
         const auto htype = handler_family::type<Component...>();
         return PersistentView<Entity, Component...>{*handlers[htype], (assure<Component>(), pool<Component>())...};
@@ -1640,7 +1640,7 @@ public:
      * @return A newly created raw view.
      */
     template<typename Component>
-    RawView<Entity, Component> view(raw_t) {
+    RawView<Entity, Component> raw_view() {
         assure<Component>();
         return RawView<Entity, Component>{pool<Component>()};
     }

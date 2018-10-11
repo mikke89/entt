@@ -485,7 +485,7 @@ TEST(DefaultRegistry, StandardView) {
 
 TEST(DefaultRegistry, PersistentView) {
     entt::DefaultRegistry registry;
-    auto view = registry.view<int, char>(entt::persistent_t{});
+    auto view = registry.persistent_view<int, char>();
 
     ASSERT_TRUE((registry.contains<int, char>()));
     ASSERT_FALSE((registry.contains<int, double>()));
@@ -517,7 +517,7 @@ TEST(DefaultRegistry, PersistentView) {
 
 TEST(DefaultRegistry, RawView) {
     entt::DefaultRegistry registry;
-    auto view = registry.view<int>(entt::raw_t{});
+    auto view = registry.raw_view<int>();
 
     const auto e0 = registry.create();
     registry.assign<int>(e0, 0);
@@ -547,7 +547,7 @@ TEST(DefaultRegistry, CleanStandardViewAfterReset) {
 
 TEST(DefaultRegistry, CleanPersistentViewAfterReset) {
     entt::DefaultRegistry registry;
-    auto view = registry.view<int, char>(entt::persistent_t{});
+    auto view = registry.persistent_view<int, char>();
 
     const auto entity = registry.create();
     registry.assign<int>(entity, 0);
@@ -562,7 +562,7 @@ TEST(DefaultRegistry, CleanPersistentViewAfterReset) {
 
 TEST(DefaultRegistry, CleanRawViewAfterReset) {
     entt::DefaultRegistry registry;
-    auto view = registry.view<int>(entt::raw_t{});
+    auto view = registry.raw_view<int>();
     registry.assign<int>(registry.create(), 0);
 
     ASSERT_EQ(view.size(), entt::DefaultRegistry::size_type{1});
@@ -857,5 +857,5 @@ TEST(DefaultRegistry, SignalsOnAccommodate) {
     registry.assign<int>(entity);
     registry.accommodate<char>(entity);
 
-    ASSERT_FALSE((registry.view<int, char>(entt::persistent_t{}).empty()));
+    ASSERT_FALSE((registry.persistent_view<int, char>().empty()));
 }
