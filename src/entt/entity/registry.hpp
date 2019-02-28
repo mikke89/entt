@@ -186,6 +186,15 @@ class registry {
         return std::make_tuple(pdata, static_cast<sparse_set<Entity, std::decay_t<Component>> *>(pdata->pool.get()));
     }
 
+	template<typename... Component>
+	auto nullptr_tuple() const ENTT_NOEXCEPT {
+		if constexpr (sizeof...(Component) == 1) {
+			return (static_cast<std::add_const_t<Component> *>(nullptr), ...);
+		} else {
+			return std::tuple<std::add_const_t<Component> *...>{nullptr_tuple<Component>()...};
+		}
+	}
+
 public:
     /*! @brief Underlying entity identifier. */
     using entity_type = typename traits_type::entity_type;
@@ -745,6 +754,40 @@ public:
             return std::tuple<Component *...>{try_get<Component>(entity)...};
         }
     }
+
+
+	/**
+	 * @brief Returns pointers to the given components for an entity.
+	 *
+	 * @tparam Component Types of components to get.
+	 * @param entity An entity identifier, valid or not.
+	 * @return Pointers to the components owned by the entity if valid.
+	 */
+	template<typename... Component>
+	auto safe_get([[maybe_unused]] const entity_type entity) const ENTT_NOEXCEPT {
+		if (!valid(entity)) {
+			if constexpr (sizeof...(Component) == 1) {
+				return (static_cast<std::add_const_t<Component> *>(nullptr), ...);
+			} else {
+				return std::tuple<std::add_const_t<Component> *...>{nullptr_tuple<Component>()...};
+			}
+		}
+		if constexpr (sizeof...(Component) == 1) {
+			return (std::as_const(*std::get<1>(assure<Component>())).try_get(entity), ...);
+		} else {
+			return std::tuple<std::add_const_t<Component> *...>{try_get<Component>(entity)...};
+		}
+	}
+
+	/*! @copydoc safe_get */
+	template<typename... Component>
+	inline auto safe_get([[maybe_unused]] const entity_type entity) ENTT_NOEXCEPT {
+		if constexpr (sizeof...(Component) == 1) {
+			return (const_cast<Component *>(std::as_const(*this).template safe_get<Component>(entity)), ...);
+		} else {
+			return std::tuple<Component *...>{safe_get<Component>(entity)...};
+		}
+	}
 
     /**
      * @brief Replaces the given component for an entity.
