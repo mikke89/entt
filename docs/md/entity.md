@@ -6,9 +6,10 @@
 # Table of Contents
 
 * [Introduction](#introduction)
-* [Design choices](#design-choices)
+* [Design decisions](#design-decisions)
   * [A bitset-free entity-component system](#a-bitset-free-entity-component-system)
   * [Pay per use](#pay-per-use)
+  * [All or nothing](#all-or-nothing)
 * [Vademecum](#vademecum)
 * [The Registry, the Entity and the Component](#the-registry-the-entity-and-the-component)
   * [Observe changes](#observe-changes)
@@ -23,8 +24,9 @@
   * [Prototype](#prototype)
   * [Helpers](#helpers)
     * [Dependency function](#dependency-function)
-    * [Labels](#labels)
+    * [Tags](#tags)
   * [Null entity](#null-entity)
+  * [Context variables](#context-variables)
 * [Views and Groups](#views-and-groups)
   * [Views](#views)
   * [Runtime views](#runtime-views)
@@ -35,6 +37,7 @@
   * [Types: const, non-const and all in between](#types-const-non-const-and-all-in-between)
   * [Give me everything](#give-me-everything)
   * [What is allowed and what is not](#what-is-allowed-and-what-is-not)
+    * [More performance, more constraints](#more-performance-more-constraints)
 * [Empty type optimization](#empty-type-optimization)
 * [Multithreading](#multithreading)
   * [Iterators](#iterators)
@@ -49,7 +52,7 @@ more) written in modern C++.<br/>
 The entity-component-system (also known as _ECS_) is an architectural pattern
 used mostly in game development.
 
-# Design choices
+# Design decisions
 
 ## A bitset-free entity-component system
 
@@ -90,6 +93,22 @@ performance along critical paths is high.
 So far, this choice has proven to be a good one and I really hope it can be for
 many others besides me.
 
+## All or nothing
+
+`EnTT` is such that at every moment a pair `(T *, size)` is available to
+directly access all the instances of a given component type `T`.<br/>
+This was a guideline and a design decision that influenced many choices, for
+better and for worse. I cannot say whether it will be useful or not to the
+reader, but it's worth to mention it, because it's one of the corner stones of
+this library.
+
+Many of the tools described below, from the registry to the views and up to the
+groups give the possibility to get this information and have been designed
+around this need, which was and remains one of my main requirements during the
+development.<br/>
+The rest is experimentation and the desire to invent something new, hoping to
+have succeeded.
+
 # Vademecum
 
 The registry to store, the views and the groups to iterate. That's all.
@@ -129,7 +148,7 @@ Entities are represented by _entity identifiers_. An entity identifier is an
 opaque type that users should not inspect or modify in any way. It carries
 information about the entity itself and its version.
 
-A registry can be used both to construct and destroy entities:
+A registry can be used both to construct and to destroy entities:
 
 ```cpp
 // constructs a naked entity with no components and returns its identifier
@@ -139,15 +158,20 @@ auto entity = registry.create();
 registry.destroy(entity);
 ```
 
-There exist also overloads of the `create` and `destroy` member functions that
-accept two iterators, that is a range to assign or to destroy. It can be used to
-create or destroy multiple entities at once:
+There exists also an overload of the `create` and `destroy` member functions
+that accepts two iterators, that is a range to assign or to destroy. It can be
+used to create or destroy multiple entities at once:
 
 ```cpp
 // destroys all the entities in a range
 auto view = registry.view<a_component, another_component>();
 registry.destroy(view.begin(), view.end());
 ```
+
+In both cases, the `create` member function accepts also a list of default
+constructible types of components to assign to the entities before to return.
+It's a faster alternative to the creation and subsequent assignment of
+components in separate steps.
 
 When an entity is destroyed, the registry can freely reuse it internally with a
 slightly different identifier. In particular, the version of an entity is
@@ -287,31 +311,34 @@ the component owned by an entity if any, a null pointer otherwise.
 
 Because of how the registry works internally, it stores a couple of signal
 handlers for each pool in order to notify some of its data structures on the
-construction and destruction of components.<br/>
-These signal handlers are also exposed and made available to users. This is the
-basic brick to build fancy things like dependencies and reactive systems.
+construction and destruction of components. Moreover, it offers also a signal
+handler to listen for changes on components.<br/>
+These signal handlers are also exposed and made available to users. These are
+the basic bricks to build fancy things like dependencies and reactive systems.
 
 To get a sink to be used to connect and disconnect listeners so as to be
-notified on the creation of a component, use the `construction` member function:
+notified on the creation of a component, use the `on_assign` member function:
 
 ```cpp
 // connects a free function
-registry.construction<position>().connect<&my_free_function>();
+registry.on_assign<position>().connect<&my_free_function>();
 
 // connects a member function
-registry.construction<position>().connect<&my_class::member>(&instance);
+registry.on_assign<position>().connect<&my_class::member>(&instance);
 
 // disconnects a free function
-registry.construction<position>().disconnect<&my_free_function>();
+registry.on_assign<position>().disconnect<&my_free_function>();
 
 // disconnects a member function
-registry.construction<position>().disconnect<&my_class::member>(&instance);
+registry.on_assign<position>().disconnect<&my_class::member>(&instance);
 ```
 
-To be notified when components are destroyed, use the `destruction` member
+The `on_replace` member function returns instead a sink object to which to
+connect listeners that are triggered when components are explicitly replaced.
+To be notified when components are destroyed, use the `on_remove` member
 function instead.
 
-The function type of a listener is the same in both cases and should be
+The function type of a listener is the same in all cases and should be
 equivalent to:
 
 ```cpp
@@ -322,6 +349,7 @@ In other terms, a listener is provided with the registry that triggered the
 notification and the entity affected by the change. Note also that:
 
 * Listeners are invoked **after** components have been assigned to entities.
+* Listeners are invoked **after** components have been replaced for entities.
 * Listeners are invoked **before** components have been removed from entities.
 * The order of invocation of the listeners isn't guaranteed in any case.
 
@@ -330,13 +358,15 @@ particular:
 
 * Connecting and disconnecting other functions from within the body of a
   listener should be avoided. It can lead to undefined behavior in some cases.
+* Replacing components from within the body of a listener that observes changes
+  on entities should be avoided. Intuitively, it could trigger an infinite loop.
 * Assigning and removing components from within the body of a listener that
   observes the destruction of instances of a given type should be avoided. It
   can lead to undefined behavior in some cases. This type of listeners is
   intended to provide users with an easy way to perform cleanup and nothing
   more.
 
-To a certain extent, these limitations do not apply. However, it is risky to try
+To a certain extent, these limitations don't apply. However, it's risky to try
 to force them and users should respect the limitations unless they know exactly
 what they are doing. Subtle bugs are the price to pay in case of errors
 otherwise.
@@ -748,7 +778,7 @@ The following adds components `a_type` and `another_type` whenever `my_type` is
 assigned to an entity:
 
 ```cpp
-entt::connnect<a_type, another_type>(registry.construction<my_type>());
+entt::connnect<a_type, another_type>(registry.on_assign<my_type>());
 ```
 
 A component is assigned to an entity and thus default initialized only in case
@@ -757,21 +787,21 @@ be overriden.<br/>
 A dependency can easily be broken by means of the following function template:
 
 ```cpp
-entt::disconnect<a_type, another_type>(registry.construction<my_type>());
+entt::disconnect<a_type, another_type>(registry.on_assign<my_type>());
 ```
 
-### Labels
+### Tags
 
-There's nothing magical about the way labels can be assigned to entities while
+There's nothing magical about the way tags can be assigned to entities while
 avoiding a performance hit at runtime. Nonetheless, the syntax can be annoying
 and that's why a more user-friendly shortcut is provided to do it.<br/>
-This shortcut is the alias template `entt::label`.
+This shortcut is the alias template `entt::tag`.
 
-If used in combination with hashed strings, it helps to use labels where types
+If used in combination with hashed strings, it helps to use tags where types
 would be required otherwise. As an example:
 
 ```cpp
-registry.assign<entt::label<"enemy"_hs>>(entity);
+registry.assign<entt::tag<"enemy"_hs>>(entity);
 ```
 
 ## Null entity
@@ -801,6 +831,40 @@ Similarly, the null entity can be compared to any other identifier:
 const auto entity = registry.create();
 const bool null = (entity == entt::null);
 ```
+
+## Context variables
+
+It is often convenient to assign context variables to a registry, so as to make
+it the only _source of truth_ of an application.<br/>
+This is possible by means of a member function named `set` to use to create a
+context variable from a given type. Later on, either `ctx` or `try_ctx` can be
+used to retrieve the newly created instance and `unset` is there to literally
+reset it if needed.
+
+Example of use:
+
+```cpp
+// creates a new context variable initialized with the given values
+registry.set<my_type>(42, 'c');
+
+// gets the context variable
+const auto &var = registry.ctx<my_type>();
+
+// if in doubts, probe the registry to avoid assertions in case of errors
+if(auto *ptr = registry.try_ctx<my_type>(); ptr) {
+    // uses the context variable associated with the registry, if any
+}
+
+// unsets the context variable
+registry.unset<my_type>();
+```
+
+The type of a context variable must be such that it's default constructible and
+can be moved. The `set` member function either creates a new instance of the
+context variable or overwrites an already existing one if any. The `try_ctx`
+member function returns a pointer to the context variable if it exists,
+otherwise it returns a null pointer. This fits well with the `if` statement with
+initializer.
 
 # Views and Groups
 
@@ -990,7 +1054,7 @@ solutions around usually try to optimize everything, because it is known that
 somewhere within the _everything_ there are also our usage patterns. However
 this has a cost that isn't negligible, both in terms of performance and memory
 usage. Ironically, users pay the price also for things they don't want and this
-isn't something I like much. Even worse, you cannot easily disable such a
+isn't something I like much. Even worse, one cannot easily disable such a
 behavior. Groups work differently instead and are designed to optimize only the
 real use cases when users find they need to.<br/>
 Another nice-to-have feature of groups is that they have no impact on memory
@@ -1230,12 +1294,12 @@ not be used frequently to avoid the risk of a performance hit.
 
 ## What is allowed and what is not
 
-Most of the _ECS_ available out there have some annoying limitations (at least
-from my point of view): entities and components cannot be created nor destroyed
-during iterations.<br/>
+Most of the _ECS_ available out there don't allow to create and destroy entities
+and components during iterations.<br/>
 `EnTT` partially solves the problem with a few limitations:
 
-* Creating entities and components is allowed during iterations.
+* Creating entities and components is allowed during iterations in almost all
+  cases.
 * Deleting the current entity or removing its components is allowed during
   iterations. For all the other entities, destroying them or removing their
   components isn't allowed and can result in undefined behavior.
@@ -1268,6 +1332,47 @@ To work around it, possible approaches are:
 
 A notable side effect of this feature is that the number of required allocations
 is further reduced in most of the cases.
+
+### More performance, more constraints
+
+Groups are a (much) faster alternative to views. However, the higher the
+performance, the greater the constraints on what is allowed and what is
+not.<br/>
+In particular, groups add in some rare cases a limitation on the creation of
+components during iterations. It happens in quite particular cases. Given the
+nature and the scope of the groups, it isn't something in which it will happen
+to come across probably, but it's good to know it anyway.
+
+First of all, it must be said that creating components while iterating a group
+isn't a problem at all and can be done freely as it happens with the views. The
+same applies to the destruction of components and entities, for which the rules
+mentioned above apply.
+
+The additional limitation pops out instead when a given component that is owned
+by a group is iterated outside of it. In this case, adding components that are
+part of the group itself may invalidate the iterators. There are no further
+limitations to the destruction of components and entities.<br/>
+Fortunately, this isn't always true. In fact, it almost never is and this
+happens only under certain conditions. In particular:
+
+* Iterating a type of component that is part of a group with a single component
+  view and adding to an entity all the components required to get it into the
+  group may invalidate the iterators.
+
+* Iterating a type of component that is part of a group with a multi component
+  view and adding to an entity all the components required to get it into the
+  group can invalidate the iterators, unless users specify another type of
+  component to use to induce the order of iteration of the view (in this case,
+  the former is treated as a free type and isn't affected by the limitation).
+
+In other words, the limitation doesn't exist as long as a type is treated as a
+free type (as an example with multi component views and partial- or non-owning
+groups) or iterated with its own group, but it can occur if the type is used as
+a main type to rule on an iteration.<br/>
+This happens because groups own the pools of their components and organize the
+data internally to maximize performance. Because of that, full consistency for
+owned components is guaranteed only when they are iterated as part of their
+groups or as free types with multi component views and groups in general.
 
 # Empty type optimization
 
@@ -1331,11 +1436,10 @@ expedients.
 ## Iterators
 
 A special mention is needed for the iterators returned by the views and the
-groups. Most of the time they meet the requirements of **random access
-iterators**, in all cases they meet at least the requirements of **forward
-iterators**.<br/>
-In other terms, they are suitable for use with the **parallel algorithms** of
-the standard library. If it's not clear, this is a great thing.
+groups. Most of the time they meet the requirements of random access iterators,
+in all cases they meet at least the requirements of forward iterators.<br/>
+In other terms, they are suitable for use with the parallel algorithms of the
+standard library. If it's not clear, this is a great thing.
 
 As an example, this kind of iterators can be used in combination with
 `std::for_each` and `std::execution::par` to parallelize the visit and therefore

@@ -7,8 +7,8 @@
 
 template<typename Storage>
 struct output_archive {
-    output_archive(Storage &storage)
-        : storage{storage}
+    output_archive(Storage &instance)
+        : storage{instance}
     {}
 
     template<typename... Value>
@@ -22,15 +22,15 @@ private:
 
 template<typename Storage>
 struct input_archive {
-    input_archive(Storage &storage)
-        : storage{storage}
+    input_archive(Storage &instance)
+        : storage{instance}
     {}
 
     template<typename... Value>
     void operator()(Value &... value) {
-        auto assign = [this](auto &value) {
-            auto &queue = std::get<std::queue<std::decay_t<decltype(value)>>>(storage);
-            value = queue.front();
+        auto assign = [this](auto &val) {
+            auto &queue = std::get<std::queue<std::decay_t<decltype(val)>>>(storage);
+            val = queue.front();
             queue.pop();
         };
 
@@ -49,12 +49,12 @@ struct another_component {
 };
 
 struct what_a_component {
-    entt::registry<>::entity_type bar;
-    std::vector<entt::registry<>::entity_type> quux;
+    entt::entity bar;
+    std::vector<entt::entity> quux;
 };
 
 TEST(Snapshot, Dump) {
-    entt::registry<> registry;
+    entt::registry registry;
 
     const auto e0 = registry.create();
     registry.assign<int>(e0, 42);
@@ -73,7 +73,7 @@ TEST(Snapshot, Dump) {
     auto v1 = registry.current(e1);
 
     using storage_type = std::tuple<
-        std::queue<entt::registry<>::entity_type>,
+        std::queue<entt::entity>,
         std::queue<int>,
         std::queue<char>,
         std::queue<double>,
@@ -122,7 +122,7 @@ TEST(Snapshot, Dump) {
 }
 
 TEST(Snapshot, Partial) {
-    entt::registry<> registry;
+    entt::registry registry;
 
     const auto e0 = registry.create();
     registry.assign<int>(e0, 42);
@@ -141,7 +141,7 @@ TEST(Snapshot, Partial) {
     auto v1 = registry.current(e1);
 
     using storage_type = std::tuple<
-        std::queue<entt::registry<>::entity_type>,
+        std::queue<entt::entity>,
         std::queue<int>,
         std::queue<char>,
         std::queue<double>
@@ -203,7 +203,7 @@ TEST(Snapshot, Partial) {
 }
 
 TEST(Snapshot, Iterator) {
-    entt::registry<> registry;
+    entt::registry registry;
 
     for(auto i = 0; i < 50; ++i) {
         const auto entity = registry.create();
@@ -215,7 +215,7 @@ TEST(Snapshot, Iterator) {
     }
 
     using storage_type = std::tuple<
-        std::queue<entt::registry<>::entity_type>,
+        std::queue<entt::entity>,
         std::queue<another_component>
     >;
 
@@ -238,18 +238,16 @@ TEST(Snapshot, Iterator) {
 }
 
 TEST(Snapshot, Continuous) {
-    using entity_type = entt::registry<>::entity_type;
+    entt::registry src;
+    entt::registry dst;
 
-    entt::registry<> src;
-    entt::registry<> dst;
+    entt::continuous_loader loader{dst};
 
-    entt::continuous_loader<entity_type> loader{dst};
-
-    std::vector<entity_type> entities;
-    entity_type entity;
+    std::vector<entt::entity> entities;
+    entt::entity entity;
 
     using storage_type = std::tuple<
-        std::queue<entity_type>,
+        std::queue<entt::entity>,
         std::queue<a_component>,
         std::queue<another_component>,
         std::queue<what_a_component>,
@@ -300,8 +298,8 @@ TEST(Snapshot, Continuous) {
     decltype(dst.size()) another_component_cnt{};
     decltype(dst.size()) what_a_component_cnt{};
 
-    dst.each([&dst, &a_component_cnt](auto entity) {
-        ASSERT_TRUE(dst.has<a_component>(entity));
+    dst.each([&dst, &a_component_cnt](auto entt) {
+        ASSERT_TRUE(dst.has<a_component>(entt));
         ++a_component_cnt;
     });
 
@@ -310,11 +308,11 @@ TEST(Snapshot, Continuous) {
         ++another_component_cnt;
     });
 
-    dst.view<what_a_component>().each([&dst, &what_a_component_cnt](auto entity, const auto &component) {
-        ASSERT_EQ(entity, component.bar);
+    dst.view<what_a_component>().each([&dst, &what_a_component_cnt](auto entt, const auto &component) {
+        ASSERT_EQ(entt, component.bar);
 
-        for(auto entity: component.quux) {
-            ASSERT_TRUE(dst.valid(entity));
+        for(auto child: component.quux) {
+            ASSERT_TRUE(dst.valid(child));
         }
 
         ++what_a_component_cnt;
@@ -367,8 +365,8 @@ TEST(Snapshot, Continuous) {
     });
 
     entities.clear();
-    for(auto entity: src.view<a_component>()) {
-        entities.push_back(entity);
+    for(auto entt: src.view<a_component>()) {
+        entities.push_back(entt);
     }
 
     src.destroy(entity);
@@ -429,15 +427,13 @@ TEST(Snapshot, Continuous) {
 }
 
 TEST(Snapshot, MoreOnShrink) {
-    using entity_type = entt::registry<>::entity_type;
+    entt::registry src;
+    entt::registry dst;
 
-    entt::registry<> src;
-    entt::registry<> dst;
-
-    entt::continuous_loader<entity_type> loader{dst};
+    entt::continuous_loader loader{dst};
 
     using storage_type = std::tuple<
-        std::queue<entity_type>,
+        std::queue<entt::entity>,
         std::queue<a_component>
     >;
 
@@ -457,15 +453,13 @@ TEST(Snapshot, MoreOnShrink) {
 }
 
 TEST(Snapshot, SyncDataMembers) {
-    using entity_type = entt::registry<>::entity_type;
+    entt::registry src;
+    entt::registry dst;
 
-    entt::registry<> src;
-    entt::registry<> dst;
-
-    entt::continuous_loader<entity_type> loader{dst};
+    entt::continuous_loader loader{dst};
 
     using storage_type = std::tuple<
-        std::queue<entity_type>,
+        std::queue<entt::entity>,
         std::queue<what_a_component>
     >;
 
@@ -493,7 +487,7 @@ TEST(Snapshot, SyncDataMembers) {
     ASSERT_TRUE(dst.has<what_a_component>(loader.map(parent)));
     ASSERT_TRUE(dst.has<what_a_component>(loader.map(child)));
 
-    ASSERT_EQ(dst.get<what_a_component>(loader.map(parent)).bar, static_cast<entity_type>(entt::null));
+    ASSERT_EQ(dst.get<what_a_component>(loader.map(parent)).bar, static_cast<entt::entity>(entt::null));
 
     const auto &component = dst.get<what_a_component>(loader.map(child));
 

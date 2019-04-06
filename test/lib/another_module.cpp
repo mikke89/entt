@@ -13,13 +13,13 @@
 #endif
 #endif
 
-ENTT_SHARED_TYPE(int)
-ENTT_SHARED_TYPE(char)
-ENTT_SHARED_TYPE(double)
-ENTT_SHARED_TYPE(float)
+ENTT_NAMED_TYPE(int)
+ENTT_NAMED_TYPE(char)
+ENTT_NAMED_TYPE(double)
+ENTT_NAMED_TYPE(float)
 
-LIB_EXPORT typename entt::registry<>::component_type another_module_int_type() {
-    entt::registry<> registry;
+LIB_EXPORT typename entt::registry::component_type another_module_int_type() {
+    entt::registry registry;
 
     (void)registry.type<char>();
     (void)registry.type<const int>();
@@ -30,8 +30,8 @@ LIB_EXPORT typename entt::registry<>::component_type another_module_int_type() {
     return registry.type<int>();
 }
 
-LIB_EXPORT typename entt::registry<>::component_type another_module_char_type() {
-    entt::registry<> registry;
+LIB_EXPORT typename entt::registry::component_type another_module_char_type() {
+    entt::registry registry;
 
     (void)registry.type<int>();
     (void)registry.type<const char>();
@@ -42,7 +42,7 @@ LIB_EXPORT typename entt::registry<>::component_type another_module_char_type() 
     return registry.type<char>();
 }
 
-LIB_EXPORT void assign_velocity(int vel, entt::registry<> &registry) {
+LIB_EXPORT void assign_velocity(int vel, entt::registry &registry) {
     for(auto entity: registry.view<position>()) {
         registry.assign<velocity>(entity, vel, vel);
     }

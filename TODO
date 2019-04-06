@@ -6,19 +6,24 @@
 * runner proposal: https://en.wikipedia.org/wiki/Fork%E2%80%93join_model https://slide-rs.github.io/specs/03_dispatcher.html
 * work stealing job system (see #100)
 * meta: sort of meta view based on meta stuff to iterate entities, void * and meta info objects
-* hashed string: add implicit check on construction for uniqueness (optional)
 * allow for built-in parallel each if possible
-* tags revenge: if it's possible, reintroduce them but without a link to entities (see #169 for more details)
-* empty components model allows for shared components and prefabs unity-like
 * allow to replace std:: with custom implementations
 * allow to sort groups (::respect can already work with begin/end instead of a whole sparse set)
-* cleanup - see https://github.com/skypjack/entt/commit/ad5cedc08c83e8cbcc8aaeac9634d44624ffe35a#commitcomment-32380903
-
-TODO
-* add and burst add with components (sort of registry.create<A, B>(first, last) and registry.create<A, B>())
-
-TODO
-* events on replace, so that one can track updated components? indagate impact
-* define basic reactive systems (track entities to which component is attached, track entities from which component is removed, and so on)
-* define systems as composable mixins (initializazion, reactive, update, whatever) with flexible auto-detected arguments (registry, views, etc)
-==> from Tommaso on discord view<Health, Transform>().where<Health>([](h) {h > 5}).where<Transform>([](t) {t.inside(aabb)});
+  -it would ease by far the group trick for hierarchies that requires otherwise more boilerplate
+* remove runtime views, welcome reflection and what about snapshot?
+* empty components model allows for shared components and prefabs unity-like
+  - each with entity return the shared component multiple times, one per entity that refers to it
+  - each components only return actual component, so shared components are returned only once
+* types defined at runtime that refer to the same compile-time type (but to different pools) are possible, the library is almost there
+* add take functionality, eg registry.take(entity, other); where it takes the entity and all its components from registry and move them to other
+* add entity function to views/groups (component -> owner, see sparse sets)
+* add opaque input iterators to views and groups that return tuples <entity, T &...> (proxy), multi-pass guaranteed
+* add fast lane for raw iterations, extend mt doc to describe allowed add/remove with pre-allocations on fast lanes
+* review sparse set to allow customization (mix pack in the spec, base is position only)
+  - non-owning groups can iterate pages and skip empty ones, this should mitigate the lack of the packed array
+* review 64 bit id: user defined area + dedicated member on the registry to set it
+* events on replace, so that one can track updated components
+  - introduce ENTT_REPLACE_ONLY mode
+  - define basic reactive systems (track entities to which component is attached, track entities from which component is removed, and so on)
+  - define systems as composable mixins (initializazion, reactive, update, whatever) with flexible auto-detected arguments (registry, views, etc)
+  - from Tommaso on discord view<Health, Transform>().where<Health>([](h) {h > 5}).where<Transform>([](t) {t.inside(aabb)});

@@ -13,7 +13,7 @@ enum class properties {
 struct empty_type {
     virtual ~empty_type() = default;
 
-    static void destroy(empty_type &instance) {
+    static void destroy(empty_type *) {
         ++counter;
     }
 
@@ -50,7 +50,10 @@ struct base_type {
 
 struct derived_type: base_type {
     derived_type() = default;
-    derived_type(const base_type &, int i, char c): i{i}, c{c} {}
+
+    derived_type(const base_type &, int value, char character)
+        : i{value}, c{character}
+    {}
 
     const int i{};
     const char c{};
@@ -83,11 +86,14 @@ struct func_type {
 struct setter_getter_type {
     int value{};
 
-    int setter(int value) { return this->value = value; }
+    int setter(int val) { return value = val; }
     int getter() { return value; }
 
-    static int static_setter(setter_getter_type &type, int value) { return type.value = value; }
-    static int static_getter(const setter_getter_type &type) { return type.value; }
+    int setter_with_ref(const int &val) { return value = val; }
+    const int & getter_with_ref() { return value; }
+
+    static int static_setter(setter_getter_type *type, int value) { return type->value = value; }
+    static int static_getter(const setter_getter_type *type) { return type->value; }
 };
 
 struct not_comparable_type {
@@ -159,7 +165,8 @@ struct Meta: public ::testing::Test {
         entt::reflect<setter_getter_type>("setter_getter")
                 .data<&setter_getter_type::static_setter, &setter_getter_type::static_getter>("x")
                 .data<&setter_getter_type::setter, &setter_getter_type::getter>("y")
-                .data<&setter_getter_type::static_setter, &setter_getter_type::getter>("z");
+                .data<&setter_getter_type::static_setter, &setter_getter_type::getter>("z")
+                .data<&setter_getter_type::setter_with_ref, &setter_getter_type::getter_with_ref>("w");
 
         entt::reflect<an_abstract_type>("an_abstract_type", std::make_pair(properties::prop_bool, false))
                 .data<&an_abstract_type::i>("i")
@@ -174,6 +181,17 @@ struct Meta: public ::testing::Test {
                 .base<an_abstract_type>()
                 .base<another_abstract_type>()
                 .func<&concrete_type::f>("f");
+    }
+
+    static void SetUpAfterUnregistration() {
+        entt::reflect<double>().conv<float>();
+
+        entt::reflect<derived_type>("my_type", std::make_pair(properties::prop_bool, false))
+                .ctor<>();
+
+        entt::reflect<another_abstract_type>("your_type")
+                .data<&another_abstract_type::j>("a_data_member")
+                .func<&another_abstract_type::h>("a_member_function");
     }
 
     void SetUp() override {
@@ -644,7 +662,7 @@ TEST_F(Meta, MetaCtor) {
     ctor.prop([](auto prop) {
         ASSERT_TRUE(prop);
         ASSERT_EQ(prop.key(), properties::prop_bool);
-        ASSERT_EQ(prop.value(), false);
+        ASSERT_FALSE(prop.value().template cast<bool>());
     });
 
     ASSERT_FALSE(ctor.prop(properties::prop_int));
@@ -653,7 +671,7 @@ TEST_F(Meta, MetaCtor) {
 
     ASSERT_TRUE(prop);
     ASSERT_EQ(prop.key(), properties::prop_bool);
-    ASSERT_EQ(prop.value(), false);
+    ASSERT_FALSE(prop.value().template cast<bool>());
 }
 
 TEST_F(Meta, MetaCtorFunc) {
@@ -953,6 +971,22 @@ TEST_F(Meta, MetaDataSetterGetterAsMemberFunctions) {
     ASSERT_EQ(data.parent(), entt::resolve("setter_getter"));
     ASSERT_EQ(data.type(), entt::resolve<int>());
     ASSERT_STREQ(data.name(), "y");
+    ASSERT_FALSE(data.is_const());
+    ASSERT_FALSE(data.is_static());
+    ASSERT_EQ(data.get(instance).cast<int>(), 0);
+    ASSERT_TRUE(data.set(instance, 42));
+    ASSERT_EQ(data.get(instance).cast<int>(), 42);
+}
+
+TEST_F(Meta, MetaDataSetterGetterWithRefAsMemberFunctions) {
+    auto data = entt::resolve<setter_getter_type>().data("w");
+    setter_getter_type instance{};
+
+    ASSERT_TRUE(data);
+    ASSERT_NE(data, entt::meta_data{});
+    ASSERT_EQ(data.parent(), entt::resolve("setter_getter"));
+    ASSERT_EQ(data.type(), entt::resolve<int>());
+    ASSERT_STREQ(data.name(), "w");
     ASSERT_FALSE(data.is_const());
     ASSERT_FALSE(data.is_static());
     ASSERT_EQ(data.get(instance).cast<int>(), 0);
@@ -1468,4 +1502,58 @@ TEST_F(Meta, ArithmeticTypeAndNamedConstants) {
 
     ASSERT_EQ(type.data("min").get({}).cast<unsigned int>(), 0u);
     ASSERT_EQ(type.data("max").get({}).cast<unsigned int>(), 100u);
+}
+
+TEST_F(Meta, Unregister) {
+    entt::unregister<double>();
+    entt::unregister<char>();
+    entt::unregister<properties>();
+    entt::unregister<unsigned int>();
+    entt::unregister<base_type>();
+    entt::unregister<derived_type>();
+    entt::unregister<empty_type>();
+    entt::unregister<fat_type>();
+    entt::unregister<data_type>();
+    entt::unregister<func_type>();
+    entt::unregister<setter_getter_type>();
+    entt::unregister<an_abstract_type>();
+    entt::unregister<another_abstract_type>();
+    entt::unregister<concrete_type>();
+
+    ASSERT_FALSE(entt::resolve("char"));
+    ASSERT_FALSE(entt::resolve("base"));
+    ASSERT_FALSE(entt::resolve("derived"));
+    ASSERT_FALSE(entt::resolve("empty"));
+    ASSERT_FALSE(entt::resolve("fat"));
+    ASSERT_FALSE(entt::resolve("data"));
+    ASSERT_FALSE(entt::resolve("func"));
+    ASSERT_FALSE(entt::resolve("setter_getter"));
+    ASSERT_FALSE(entt::resolve("an_abstract_type"));
+    ASSERT_FALSE(entt::resolve("another_abstract_type"));
+    ASSERT_FALSE(entt::resolve("concrete"));
+
+    Meta::SetUpAfterUnregistration();
+    entt::meta_any any{42.};
+
+    ASSERT_TRUE(any);
+    ASSERT_FALSE(any.can_convert<int>());
+    ASSERT_TRUE(any.can_convert<float>());
+
+    ASSERT_FALSE(entt::resolve("derived"));
+    ASSERT_TRUE(entt::resolve("my_type"));
+
+    entt::resolve<derived_type>().prop([](auto prop) {
+        ASSERT_TRUE(prop);
+        ASSERT_EQ(prop.key(), properties::prop_bool);
+        ASSERT_FALSE(prop.value().template cast<bool>());
+    });
+
+    ASSERT_FALSE((entt::resolve<derived_type>().ctor<const base_type &, int, char>()));
+    ASSERT_TRUE((entt::resolve<derived_type>().ctor<>()));
+
+    ASSERT_TRUE(entt::resolve("your_type").data("a_data_member"));
+    ASSERT_FALSE(entt::resolve("your_type").data("another_data_member"));
+
+    ASSERT_TRUE(entt::resolve("your_type").func("a_member_function"));
+    ASSERT_FALSE(entt::resolve("your_type").func("another_member_function"));
 }

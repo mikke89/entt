@@ -9,7 +9,16 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/rvhaabjmghg715ck?svg=true)](https://ci.appveyor.com/project/skypjack/entt)
 [![Coverage Status](https://coveralls.io/repos/github/skypjack/entt/badge.svg?branch=master)](https://coveralls.io/github/skypjack/entt?branch=master)
 [![Gitter chat](https://badges.gitter.im/skypjack/entt.png)](https://gitter.im/skypjack/entt)
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=W2HF9FESD5LJY&lc=IT&item_name=Michele%20Caini&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHosted)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.me/skypjack)
+
+**EnTT** is a header-only, tiny and easy to use **entity-component system** (and
+much more) written in **modern C++**.<br/>
+Among others, it's also used in
+[**Minecraft** by Mojang](https://minecraft.net/en-us/attribution/) and
+[**The Forge** by Confetti](https://github.com/ConfettiFX/The-Forge). Read on to
+find out what it can offer you.
+
+---
 
 Do you want to **keep up with changes** or do you have a **question** that
 doesn't require you to open an issue?<br/>
@@ -46,10 +55,6 @@ please **consider becoming a patron**:
 
 # Introduction
 
-`EnTT` is a header-only, tiny and easy to use entity-component system (and much
-more) written in modern C++. Among others, it's also used in
-[Minecraft by Mojang](https://minecraft.net/en-us/attribution/) and
-[The Forge by Confetti](https://github.com/ConfettiFX/The-Forge).<br/>
 The entity-component-system (also known as _ECS_) is an architectural pattern
 used mostly in game development. For further details:
 
@@ -108,7 +113,7 @@ struct velocity {
     float dy;
 };
 
-void update(entt::registry<> &registry) {
+void update(entt::registry &registry) {
     auto view = registry.view<position, velocity>();
 
     for(auto entity: view) {
@@ -123,8 +128,8 @@ void update(entt::registry<> &registry) {
     }
 }
 
-void update(std::uint64_t dt, entt::registry<> &registry) {
-    registry.view<position, velocity>().each([dt](const auto, auto &pos, auto &vel) {
+void update(std::uint64_t dt, entt::registry &registry) {
+    registry.view<position, velocity>().each([dt](auto &pos, auto &vel) {
         // gets all the components of the view at once ...
 
         pos.x += vel.dx * dt;
@@ -253,7 +258,7 @@ the include paths.
 
 ## Documentation
 
-The documentation is based on [doxygen](http://www.stack.nl/~dimitri/doxygen/).
+The documentation is based on [doxygen](http://www.doxygen.nl/).
 To build it:
 
     $ cd build
@@ -343,7 +348,7 @@ I can't promise that each and every contribution will be accepted, but I can
 assure that I'll do my best to take them all seriously.
 
 If you decide to participate, please see the guidelines for
-[contributing](docs/CONTRIBUTING.md) before to create issues or pull
+[contributing](docs/md/CONTRIBUTING.md) before to create issues or pull
 requests.<br/>
 Take also a look at the
 [contributors list](https://github.com/skypjack/entt/blob/master/AUTHORS) to
@@ -388,7 +393,7 @@ If you want to support this project, you can offer me an espresso. I'm from
 Italy, we're used to turning the best coffee ever in code. If you find that
 it's not enough, feel free to support me the way you prefer.<br/>
 Take a look at the donation button at the top of the page for more details or
-just click [here](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=W2HF9FESD5LJY&lc=IT&item_name=Michele%20Caini&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHosted).
+just click [here](https://www.paypal.me/skypjack).
 
 ## Hire me
 

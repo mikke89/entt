@@ -4,15 +4,11 @@
 
 #include <memory>
 #include <utility>
-#include <cassert>
 #include "../config/config.h"
+#include "fwd.hpp"
 
 
 namespace entt {
-
-
-template<typename Resource>
-class resource_cache;
 
 
 /**
@@ -37,6 +33,9 @@ class resource_handle {
     {}
 
 public:
+    /*! @brief Default constructor. */
+    resource_handle() ENTT_NOEXCEPT = default;
+
     /**
      * @brief Gets a reference to the managed resource.
      *
@@ -48,7 +47,7 @@ public:
      * @return A reference to the managed resource.
      */
     const Resource & get() const ENTT_NOEXCEPT {
-        assert(static_cast<bool>(resource));
+        ENTT_ASSERT(static_cast<bool>(resource));
         return *resource;
     }
 
@@ -86,7 +85,7 @@ public:
      * contains no resource at all.
      */
     inline const Resource * operator->() const ENTT_NOEXCEPT {
-        assert(static_cast<bool>(resource));
+        ENTT_ASSERT(static_cast<bool>(resource));
         return resource.get();
     }
 
