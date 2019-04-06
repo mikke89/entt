@@ -869,7 +869,10 @@ public:
 			}
 		}
 		if constexpr (sizeof...(Component) == 1) {
-			return (std::as_const(*std::get<1>(assure<Component>())).try_get(entity), ...);
+			const auto cpools = std::make_tuple(pool<Component>()...);
+			return ((std::get<const pool_type<Component>*>(cpools)
+				? std::get<const pool_type<Component>*>(cpools)->try_get(entity)
+				: nullptr), ...);
 		} else {
 			return std::tuple<std::add_const_t<Component> *...>{try_get<Component>(entity)...};
 		}
