@@ -2,9 +2,6 @@
 #define ENTT_SIGNAL_FWD_HPP
 
 
-#include "../config/config.h"
-
-
 namespace entt {
 
 
@@ -17,8 +14,8 @@ template<typename>
 class sink;
 
 /*! @class sigh */
-template<typename, typename>
-struct sigh;
+template<typename>
+class sigh;
 
 
 }

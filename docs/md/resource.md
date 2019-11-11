@@ -45,7 +45,7 @@ A _loader_ is a class the aim of which is to load a specific resource. It has to
 inherit directly from the dedicated base class as in the following example:
 
 ```cpp
-struct my_loader final: entt::resource_loader<my_loader, my_resource> {
+struct my_loader final: entt::loader<my_loader, my_resource> {
     // ...
 };
 ```
@@ -57,7 +57,7 @@ resource.<br/>
 As an example:
 
 ```cpp
-struct my_loader: entt::resource_loader<my_loader, my_resource> {
+struct my_loader: entt::loader<my_loader, my_resource> {
     std::shared_ptr<my_resource> load(int value) const {
         // ...
         return std::shared_ptr<my_resource>(new my_resource{ value });
@@ -76,11 +76,11 @@ Finally, a cache is a specialization of a class template tailored to a specific
 resource:
 
 ```cpp
-using my_resource_cache = entt::resource_cache<my_resource>;
+using my_cache = entt::cache<my_resource>;
 
 // ...
 
-my_resource_cache cache{};
+my_cache cache{};
 ```
 
 The idea is to create different caches for different types of resources and to
@@ -109,15 +109,14 @@ Before to explore this part of the interface, it makes sense to mention how
 resources are identified. The type of the identifiers to use is defined as:
 
 ```cpp
-entt::resource_cache<resource>::resource_type
+entt::cache<resource>::id_type
 ```
 
-Where `resource_type` is an alias for `entt::hashed_string::hash_type`.
-Therefore, resource identifiers are created explicitly as in the following
-example:
+Where `id_type` is an alias for `entt::hashed_string::hash_type`. Therefore,
+resource identifiers are created explicitly as in the following example:
 
 ```cpp
-constexpr auto identifier = entt::resource_cache<resource>::resource_type{"my/resource/identifier"_hs};
+constexpr auto identifier = entt::cache<resource>::id_type{"my/resource/identifier"_hs};
 // this is equivalent to the following
 constexpr auto hs = entt::hashed_string{"my/resource/identifier"};
 ```

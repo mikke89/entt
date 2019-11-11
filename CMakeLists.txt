@@ -16,7 +16,7 @@ endif()
 # Project configuration
 #
 
-project(EnTT VERSION 3.0.0)
+project(EnTT VERSION 3.2.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 
@@ -42,7 +42,7 @@ option(USE_COMPILE_OPTIONS "Use compile options from EnTT." ON)
 # Compiler stuff
 #
 
-if(NOT MSVC AND USE_LIBCPP)
+if(NOT WIN32 AND USE_LIBCPP)
     include(CheckCXXSourceCompiles)
     include(CMakePushCheckState)
 
@@ -52,7 +52,7 @@ if(NOT MSVC AND USE_LIBCPP)
 
     check_cxx_source_compiles("
         #include<type_traits>
-        int main() { return std::is_same<int, int>::value ? 0 : 1; }
+        int main() { return std::is_same_v<int, char>; }
     " HAS_LIBCPP)
 
     if(NOT HAS_LIBCPP)
@@ -67,6 +67,7 @@ endif()
 #
 
 add_library(EnTT INTERFACE)
+add_library(EnTT::EnTT ALIAS EnTT)
 
 configure_file(${EnTT_SOURCE_DIR}/cmake/in/version.h.in ${EnTT_SOURCE_DIR}/src/entt/config/version.h @ONLY)
 
@@ -83,16 +84,16 @@ target_compile_definitions(
 )
 
 if(USE_ASAN)
-    target_compile_options(EnTT INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-fsanitize=address -fno-omit-frame-pointer>)
-    target_link_libraries(EnTT INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-fsanitize=address -fno-omit-frame-pointer>)
+    target_compile_options(EnTT INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<PLATFORM_ID:Windows>>>:-fsanitize=address -fno-omit-frame-pointer>)
+    target_link_libraries(EnTT INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<PLATFORM_ID:Windows>>>:-fsanitize=address -fno-omit-frame-pointer>)
 endif()
 
 if(USE_COMPILE_OPTIONS)
     target_compile_options(
         EnTT
-        INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-O0 -g>
+        INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<PLATFORM_ID:Windows>>>:-O0 -g>
         # it seems that -O3 ruins a bit the performance when using clang ...
-        INTERFACE $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:Clang>>:-O2>
+        INTERFACE $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:Clang>,$<OR:$<PLATFORM_ID:Darwin>,$<PLATFORM_ID:Linux>>>:-O2>
         # ... on the other side, GCC is incredibly comfortable with it.
         INTERFACE $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:GNU>>:-O3>
     )
@@ -123,6 +124,7 @@ install(
     EXPORT EnTTTargets
     FILE EnTTTargets.cmake
     DESTINATION ${CUSTOM_INSTALL_CONFIGDIR}
+    NAMESPACE EnTT::
 )
 
 #
@@ -191,6 +193,10 @@ if(BUILD_TESTING)
     option(BUILD_MOD "Build mod example." OFF)
     option(BUILD_SNAPSHOT "Build snapshot example." OFF)
 
+    if(BUILD_MOD)
+        enable_language(C)
+    endif()
+
     enable_testing()
     add_subdirectory(test)
 endif()
@@ -213,13 +219,16 @@ endif()
 # AOB
 #
 
+FILE(GLOB GH_WORKFLOWS .github/workflows/*.yml)
+
 add_custom_target(
     entt_aob
     SOURCES
-        appveyor.yml
+        ${GH_WORKFLOWS}
+        .github/FUNDING.yml
         AUTHORS
+        CONTRIBUTING.md
         LICENSE
         README.md
         TODO
-        .travis.yml
 )

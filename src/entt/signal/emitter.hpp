@@ -73,11 +73,11 @@ class emitter {
             }
         }
 
-        inline connection_type once(listener_type listener) {
+        connection_type once(listener_type listener) {
             return once_list.emplace(once_list.cend(), false, std::move(listener));
         }
 
-        inline connection_type on(listener_type listener) {
+        connection_type on(listener_type listener) {
             return on_list.emplace(on_list.cend(), false, std::move(listener));
         }
 
@@ -123,7 +123,7 @@ class emitter {
     template<typename Event>
     static auto type() ENTT_NOEXCEPT {
         if constexpr(is_named_type_v<Event>) {
-            return named_type_traits<Event>::value;
+            return named_type_traits_v<Event>;
         } else {
             return handler_family::type<Event>;
         }

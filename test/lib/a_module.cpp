@@ -1,4 +1,5 @@
 #include <entt/entity/registry.hpp>
+#include <entt/meta/factory.hpp>
 #include <entt/signal/dispatcher.hpp>
 #include <entt/signal/emitter.hpp>
 #include "types.h"
@@ -13,12 +14,7 @@
 #endif
 #endif
 
-ENTT_NAMED_TYPE(int)
-ENTT_NAMED_TYPE(char)
-ENTT_NAMED_TYPE(double)
-ENTT_NAMED_TYPE(float)
-
-LIB_EXPORT typename entt::registry::component_type a_module_int_type() {
+LIB_EXPORT typename entt::component a_module_int_type() {
     entt::registry registry;
 
     (void)registry.type<double>();
@@ -27,7 +23,7 @@ LIB_EXPORT typename entt::registry::component_type a_module_int_type() {
     return registry.type<int>();
 }
 
-LIB_EXPORT typename entt::registry::component_type a_module_char_type() {
+LIB_EXPORT typename entt::component a_module_char_type() {
     entt::registry registry;
 
     (void)registry.type<double>();
@@ -49,4 +45,16 @@ LIB_EXPORT void trigger_another_event(entt::dispatcher &dispatcher) {
 
 LIB_EXPORT void emit_another_event(test_emitter &emitter) {
     emitter.publish<another_event>();
+}
+
+LIB_EXPORT void a_module_bind_ctx(entt::meta_ctx context) {
+    entt::meta_ctx::bind(context);
+}
+
+LIB_EXPORT void a_module_meta_init() {
+    entt::meta<char>().type().data<'c'>("c"_hs);
+}
+
+LIB_EXPORT void a_module_meta_deinit() {
+    entt::meta<char>().reset();
 }

@@ -8,6 +8,11 @@
 * [Introduction](#introduction)
 * [FAQ](#faq)
   * [Why is my debug build on Windows so slow?](#why-is-my-debug-build-on-windows-so-slow)
+  * [How can I represent hierarchies with my components?](#how-can-i-represent-hierarchies-with-my-components)
+  * [Custom entity identifiers: yay or nay?](#custom-entity-identifiers-yay-or-nay)
+  * [Warning C4307: integral constant overflow](#warning-C4307-integral-constant-overflow)
+  * [Warning C4003: the min, the max and the macro](#warning-C4003-the-min-the-max-and-the-macro)
+  * [The standard and the non-copyable types](#the-standard-and-the-non-copyable-types)
 <!--
 @endcond TURN_OFF_DOXYGEN
 -->
@@ -53,3 +58,142 @@ the performance in some cases.
 With these changes, debug performance should increase enough for most cases. If
 you want something more, you can can also switch to an optimization level `O0`
 or preferably `O1`.
+
+## How can I represent hierarchies with my components?
+
+This is one of the first questions that anyone makes when starting to work with
+the entity-component-system architectural pattern.<br/>
+There are several approaches to the problem and what’s the best one depends
+mainly on the real problem one is facing. In all cases, how to do it doesn't
+strictly depend on the library in use, but the latter can certainly allow or
+not different techniques depending on how the data are laid out.
+
+I tried to describe some of the techniques that fit well with the model of
+`EnTT`. [Here](https://skypjack.github.io/2019-06-25-ecs-baf-part-4/) is the
+first post of a series that tries to explore the problem. More will probably
+come in future.
+
+Long story short, you can always define a tree where the nodes expose implicit
+lists of children by means of the following type:
+
+```cpp
+struct relationship {
+    std::size_t children{};
+    entt::entity first{entt::null};
+    entt::entity prev{entt::null};
+    entt::entity next{entt::null};
+    entt::entity parent{entt::null};
+    // ... other data members ...
+};
+```
+
+The sort functionalities of `EnTT`, the groups and all the other features of the
+library can help then to get the best in terms of data locality and therefore
+performance from this component.
+
+## Custom entity identifiers: yay or nay?
+
+Custom entity identifiers are definitely a good idea in two cases at least:
+
+* If `std::uint32_t` isn't large enough as an underlying type.
+* If you want to avoid conflicts when using multiple registries.
+
+These identifiers are nothing more than enum classes with some salt.<br/>
+To simplify the creation of new identifiers, `EnTT` provides the macro
+`ENTT_OPAQUE_TYPE` that accepts two arguments:
+
+* The name you want to give to the new identifier (watch out for namespaces).
+* The underlying type to use (either `std::uint16_t`, `std::uint32_t`
+  or `std::uint64_t`).
+
+In fact, this is the definition of `entt::entity`:
+
+```cpp
+ENTT_OPAQUE_TYPE(entity, std::uint32_t)
+```
+
+The use of this macro is highly recommended, so as not to run into problems if
+the requirements for the identifiers should change in the future.
+
+## Warning C4307: integral constant overflow
+
+According to [this](https://github.com/skypjack/entt/issues/121) issue, using a
+hashed string under VS could generate a warning.<br/>
+First of all, I want to reassure you: it's expected and harmless. However, it
+can be annoying.
+
+To suppress it and if you don't want to suppress all the other warnings as well,
+here is a workaround in the form of a macro:
+
+```cpp
+#if defined(_MSC_VER)
+    #define HS(str)\
+        __pragma(warning(push))\
+        __pragma(warning(disable:4307))\
+        entt::hashed_string{str}\
+        __pragma(warning(pop))
+#else
+    #define HS(str) entt::hashed_string{str}
+#endif
+```
+
+With an example of use included:
+
+```cpp
+constexpr auto identifier = HS("my/resource/identifier");
+```
+
+Thanks to [huwpascoe](https://github.com/huwpascoe) for the courtesy.
+
+## Warning C4003: the min, the max and the macro
+
+On Windows, a header file defines two macros `min` and `max` which may result in
+conflicts with their counterparts in the standard library and therefore in
+errors during compilation.
+
+It's a pretty big problem but fortunately it's not a problem of `EnTT` and there
+is a fairly simple solution to it.<br/>
+It consists in defining the `NOMINMAX` macro before to include any other header
+so as to get rid of the extra definitions:
+
+```cpp
+#define NOMINMAX
+```
+
+Please refer to [this](https://github.com/skypjack/entt/issues/96) issue for
+more details.
+
+## The standard and the non-copyable types
+
+`EnTT` uses internally the trait `std::is_copy_constructible_v` to check if a
+component is actually copyable. This trait doesn't check if an object can
+actually be copied but only verifies if there is a copy constructor
+available.<br/>
+This can lead to surprising results due to some idiosyncrasies of the standard
+mainly related to the need to guarantee backward compatibility.
+
+For example, `std::vector` defines a copy constructor no matter if its value
+type is copyable or not. As a result, `std::is_copy_constructible_v` is true
+for the following specialization:
+
+```cpp
+struct type {
+    std::vector<std::unique_ptr<action>> vec;
+};
+```
+
+When trying to assign an instance of this type to an entity in the ECS part,
+this may trigger a compilation error because we cannot really make a copy of
+it.<br/>
+As a workaround, users can mark the type explicitly as non-copyable:
+
+```cpp
+struct type {
+    type(const type &) = delete;
+    type & operator=(const type &) = delete;
+
+    std::vector<std::unique_ptr<action>> vec;
+};
+```
+
+Unfortunately, this will also disable aggregate initialization.

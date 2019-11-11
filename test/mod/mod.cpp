@@ -1,9 +1,9 @@
-#include <gtest/gtest.h>
 #include <type_traits>
 #include <cassert>
 #include <map>
 #include <string>
 #include <duktape.h>
+#include <gtest/gtest.h>
 #include <entt/entity/registry.hpp>
 
 template<typename Type>
@@ -22,7 +22,7 @@ struct duktape_runtime {
 
 template<typename Comp>
 duk_ret_t set(duk_context *ctx, entt::registry &registry) {
-    const auto entity = duk_require_uint(ctx, 0);
+    const entt::entity entity{duk_require_uint(ctx, 0)};
 
     if constexpr(std::is_same_v<Comp, position>) {
         const auto x = duk_require_number(ctx, 2);
@@ -49,7 +49,7 @@ duk_ret_t set(duk_context *ctx, entt::registry &registry) {
 
 template<typename Comp>
 duk_ret_t unset(duk_context *ctx, entt::registry &registry) {
-    const auto entity = duk_require_uint(ctx, 0);
+    const entt::entity entity{duk_require_uint(ctx, 0)};
 
     if constexpr(std::is_same_v<Comp, duktape_runtime>) {
         const auto type = duk_require_uint(ctx, 1);
@@ -70,7 +70,7 @@ duk_ret_t unset(duk_context *ctx, entt::registry &registry) {
 
 template<typename Comp>
 duk_ret_t has(duk_context *ctx, entt::registry &registry) {
-    const auto entity = duk_require_uint(ctx, 0);
+    const entt::entity entity{duk_require_uint(ctx, 0)};
 
     if constexpr(std::is_same_v<Comp, duktape_runtime>) {
         duk_push_boolean(ctx, registry.has<duktape_runtime>(entity));
@@ -91,7 +91,7 @@ duk_ret_t has(duk_context *ctx, entt::registry &registry) {
 
 template<typename Comp>
 duk_ret_t get(duk_context *ctx, entt::registry &registry) {
-    [[maybe_unused]] const auto entity = duk_require_uint(ctx, 0);
+    [[maybe_unused]] const entt::entity entity{duk_require_uint(ctx, 0)};
 
     if constexpr(std::is_same_v<Comp, position>) {
         const auto &pos = registry.get<position>(entity);
@@ -123,7 +123,7 @@ duk_ret_t get(duk_context *ctx, entt::registry &registry) {
 
 class duktape_registry {
     // I'm pretty sure I won't have more than 99 components in the example
-    static constexpr entt::registry::component_type udef = 100;
+    static constexpr ENTT_ID_TYPE udef = 100;
 
     struct func_map {
         using func_type = duk_ret_t(*)(duk_context *, entt::registry &);
@@ -136,7 +136,7 @@ class duktape_registry {
 
     template<typename... Comp>
     void reg() {
-        ((func[registry.type<Comp>()] = {
+        ((func[to_integer(registry.type<Comp>())] = {
                 &::set<Comp>,
                 &::unset<Comp>,
                 &::has<Comp>,
@@ -163,7 +163,7 @@ class duktape_registry {
         auto type = duk_require_uint(ctx, 1);
 
         if(type >= udef) {
-            type = registry.type<duktape_runtime>();
+            type = to_integer(registry.type<duktape_runtime>());
         }
 
         assert(func.find(type) != func.cend());
@@ -186,7 +186,8 @@ public:
 
     static duk_ret_t create(duk_context *ctx) {
         auto &dreg = instance(ctx);
-        duk_push_uint(ctx, dreg.registry.create());
+        const auto entity = dreg.registry.create();
+        duk_push_uint(ctx, static_cast<std::underlying_type_t<entt::entity>>(entity));
         return 1;
     }
 
@@ -213,20 +214,20 @@ public:
 
         duk_push_array(ctx);
 
-        std::vector<typename entt::registry::component_type> components;
-        std::vector<typename entt::registry::component_type> runtime;
+        std::vector<entt::component> components;
+        std::vector<entt::component> runtime;
 
         for(duk_idx_t arg = 0; arg < nargs; arg++) {
             auto type = duk_require_uint(ctx, arg);
 
             if(type < udef) {
-                components.push_back(type);
+                components.push_back(entt::component{type});
             } else {
                 if(runtime.empty()) {
                     components.push_back(dreg.registry.type<duktape_runtime>());
                 }
 
-                runtime.push_back(type);
+                runtime.push_back(entt::component{type});
             }
         }
 
@@ -234,16 +235,16 @@ public:
 
         for(const auto entity: view) {
             if(runtime.empty()) {
-                duk_push_uint(ctx, entity);
+                duk_push_uint(ctx, static_cast<std::underlying_type_t<entt::entity>>(entity));
                 duk_put_prop_index(ctx, -2, pos++);
             } else {
                 const auto &others = dreg.registry.get<duktape_runtime>(entity).components;
                 const auto match = std::all_of(runtime.cbegin(), runtime.cend(), [&others](const auto type) {
-                    return others.find(type) != others.cend();
+                    return others.find(to_integer(type)) != others.cend();
                 });
 
                 if(match) {
-                    duk_push_uint(ctx, entity);
+                    duk_push_uint(ctx, static_cast<std::underlying_type_t<entt::entity>>(entity));
                     duk_put_prop_index(ctx, -2, pos++);
                 }
             }
@@ -271,7 +272,7 @@ const duk_function_list_entry js_duktape_registry_methods[] = {
 void export_types(duk_context *context, entt::registry &registry) {
     auto export_type = [](auto *ctx, auto &reg, auto idx, auto type, const auto *name) {
         duk_push_string(ctx, name);
-        duk_push_uint(ctx, reg.template type<typename decltype(type)::type>());
+        duk_push_uint(ctx, to_integer(reg.template type<typename decltype(type)::type>()));
         duk_def_prop(ctx, idx, DUK_DEFPROP_HAVE_VALUE | DUK_DEFPROP_CLEAR_WRITABLE);
     };
 
@@ -368,7 +369,7 @@ TEST(Mod, Duktape) {
     ASSERT_EQ(registry.view<position>().size(), 3u);
     ASSERT_EQ(registry.view<renderable>().size(), 2u);
 
-    registry.view<duktape_runtime>().each([](auto, const duktape_runtime &runtime) {
+    registry.view<duktape_runtime>().each([](const duktape_runtime &runtime) {
         ASSERT_EQ(runtime.components.size(), 2u);
     });
 
@@ -387,7 +388,7 @@ TEST(Mod, Duktape) {
     ASSERT_EQ(registry.view<position>().size(), 3u);
     ASSERT_EQ(registry.view<renderable>().size(), 2u);
 
-    registry.view<position, renderable, duktape_runtime>().each([](auto, const position &position, const auto &...) {
+    registry.view<position, renderable, duktape_runtime>().each([](const position &position, auto &&...) {
         ASSERT_EQ(position.x, -100.);
         ASSERT_EQ(position.y, -100.);
     });

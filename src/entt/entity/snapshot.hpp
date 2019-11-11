@@ -9,7 +9,6 @@
 #include <type_traits>
 #include <unordered_map>
 #include "../config/config.h"
-#include "entt_traits.hpp"
 #include "entity.hpp"
 #include "fwd.hpp"
 
@@ -33,8 +32,9 @@ class basic_snapshot {
     friend class basic_registry<Entity>;
 
     using follow_fn_type = Entity(const basic_registry<Entity> &, const Entity);
+    using traits_type = entt_traits<std::underlying_type_t<Entity>>;
 
-    basic_snapshot(const basic_registry<Entity> &source, Entity init, follow_fn_type *fn) ENTT_NOEXCEPT
+    basic_snapshot(const basic_registry<Entity> *source, Entity init, follow_fn_type *fn) ENTT_NOEXCEPT
         : reg{source},
           seed{init},
           follow{fn}
@@ -42,13 +42,17 @@ class basic_snapshot {
 
     template<typename Component, typename Archive, typename It>
     void get(Archive &archive, std::size_t sz, It first, It last) const {
-        archive(static_cast<Entity>(sz));
+        archive(typename traits_type::entity_type(sz));
 
         while(first != last) {
             const auto entt = *(first++);
 
-            if(reg.template has<Component>(entt)) {
-                archive(entt, reg.template get<Component>(entt));
+            if(reg->template has<Component>(entt)) {
+                if constexpr(std::is_empty_v<Component>) {
+                    archive(entt);
+                } else {
+                    archive(entt, reg->template get<Component>(entt));
+                }
             }
         }
     }
@@ -60,7 +64,7 @@ class basic_snapshot {
 
         while(begin != last) {
             const auto entt = *(begin++);
-            ((reg.template has<Component>(entt) ? ++size[Indexes] : size[Indexes]), ...);
+            ((reg->template has<Component>(entt) ? ++size[Indexes] : size[Indexes]), ...);
         }
 
         (get<Component>(archive, size[Indexes], first, last), ...);
@@ -85,8 +89,8 @@ public:
      */
     template<typename Archive>
     const basic_snapshot & entities(Archive &archive) const {
-        archive(static_cast<Entity>(reg.alive()));
-        reg.each([&archive](const auto entt) { archive(entt); });
+        archive(typename traits_type::entity_type(reg->alive()));
+        reg->each([&archive](const auto entt) { archive(entt); });
         return *this;
     }
 
@@ -102,15 +106,15 @@ public:
      */
     template<typename Archive>
     const basic_snapshot & destroyed(Archive &archive) const {
-        auto size = reg.size() - reg.alive();
-        archive(static_cast<Entity>(size));
+        auto size = reg->size() - reg->alive();
+        archive(typename traits_type::entity_type(size));
 
         if(size) {
             auto curr = seed;
             archive(curr);
 
             for(--size; size; --size) {
-                curr = follow(reg, curr);
+                curr = follow(*reg, curr);
                 archive(curr);
             }
         }
@@ -131,20 +135,7 @@ public:
      */
     template<typename... Component, typename Archive>
     const basic_snapshot & component(Archive &archive) const {
-        if constexpr(sizeof...(Component) == 1) {
-            const auto sz = reg.template size<Component...>();
-            const auto *entities = reg.template data<Component...>();
-
-            archive(static_cast<Entity>(sz));
-
-            for(std::remove_const_t<decltype(sz)> i{}; i < sz; ++i) {
-                const auto entt = entities[i];
-                archive(entt, reg.template get<Component...>(entt));
-            };
-        } else {
-            (component<Component>(archive), ...);
-        }
-
+        (component<Component>(archive, reg->template data<Component>(), reg->template data<Component>() + reg->template size<Component>()), ...);
         return *this;
     }
 
@@ -164,12 +155,12 @@ public:
      */
     template<typename... Component, typename Archive, typename It>
     const basic_snapshot & component(Archive &archive, It first, It last) const {
-        component<Component...>(archive, first, last, std::make_index_sequence<sizeof...(Component)>{});
+        component<Component...>(archive, first, last, std::index_sequence_for<Component...>{});
         return *this;
     }
 
 private:
-    const basic_registry<Entity> &reg;
+    const basic_registry<Entity> *reg;
     const Entity seed;
     follow_fn_type *follow;
 };
@@ -191,39 +182,47 @@ class basic_snapshot_loader {
     friend class basic_registry<Entity>;
 
     using force_fn_type = void(basic_registry<Entity> &, const Entity, const bool);
+    using traits_type = entt_traits<std::underlying_type_t<Entity>>;
 
-    basic_snapshot_loader(basic_registry<Entity> &source, force_fn_type *fn) ENTT_NOEXCEPT
+    basic_snapshot_loader(basic_registry<Entity> *source, force_fn_type *fn) ENTT_NOEXCEPT
         : reg{source},
           force{fn}
     {
         // to restore a snapshot as a whole requires a clean registry
-        ENTT_ASSERT(reg.empty());
+        ENTT_ASSERT(reg->empty());
     }
 
     template<typename Archive>
-    void assure(Archive &archive, bool destroyed) const {
-        Entity length{};
+    void assure(Archive &archive, bool discard) const {
+        typename traits_type::entity_type length{};
         archive(length);
 
         while(length--) {
             Entity entt{};
             archive(entt);
-            force(reg, entt, destroyed);
+            force(*reg, entt, discard);
         }
     }
 
     template<typename Type, typename Archive, typename... Args>
     void assign(Archive &archive, Args... args) const {
-        Entity length{};
+        typename traits_type::entity_type length{};
         archive(length);
 
         while(length--) {
+            static constexpr auto discard = false;
             Entity entt{};
-            Type instance{};
-            archive(entt, instance);
-            static constexpr auto destroyed = false;
-            force(reg, entt, destroyed);
-            reg.template assign<Type>(args..., entt, std::as_const(instance));
+
+            if constexpr(std::is_empty_v<Type>) {
+                archive(entt);
+                force(*reg, entt, discard);
+                reg->template assign<Type>(args..., entt);
+            } else {
+                Type instance{};
+                archive(entt, instance);
+                force(*reg, entt, discard);
+                reg->template assign<Type>(args..., entt, std::as_const(instance));
+            }
         }
     }
 
@@ -246,8 +245,8 @@ public:
      */
     template<typename Archive>
     const basic_snapshot_loader & entities(Archive &archive) const {
-        static constexpr auto destroyed = false;
-        assure(archive, destroyed);
+        static constexpr auto discard = false;
+        assure(archive, discard);
         return *this;
     }
 
@@ -263,8 +262,8 @@ public:
      */
     template<typename Archive>
     const basic_snapshot_loader & destroyed(Archive &archive) const {
-        static constexpr auto destroyed = true;
-        assure(archive, destroyed);
+        static constexpr auto discard = true;
+        assure(archive, discard);
         return *this;
     }
 
@@ -298,15 +297,15 @@ public:
      * @return A valid loader to continue restoring data.
      */
     const basic_snapshot_loader & orphans() const {
-        reg.orphans([this](const auto entt) {
-            reg.destroy(entt);
+        reg->orphans([this](const auto entt) {
+            reg->destroy(entt);
         });
 
         return *this;
     }
 
 private:
-    basic_registry<Entity> &reg;
+    basic_registry<Entity> *reg;
     force_fn_type *force;
 };
 
@@ -329,15 +328,15 @@ private:
  */
 template<typename Entity>
 class basic_continuous_loader {
-    using traits_type = entt_traits<Entity>;
+    using traits_type = entt_traits<std::underlying_type_t<Entity>>;
 
     void destroy(Entity entt) {
         const auto it = remloc.find(entt);
 
         if(it == remloc.cend()) {
-            const auto local = reg.create();
+            const auto local = reg->create();
             remloc.emplace(entt, std::make_pair(local, true));
-            reg.destroy(local);
+            reg->destroy(local);
         }
     }
 
@@ -345,16 +344,46 @@ class basic_continuous_loader {
         const auto it = remloc.find(entt);
 
         if(it == remloc.cend()) {
-            const auto local = reg.create();
+            const auto local = reg->create();
             remloc.emplace(entt, std::make_pair(local, true));
         } else {
-            remloc[entt].first =
-                    reg.valid(remloc[entt].first)
-                    ? remloc[entt].first
-                    : reg.create();
-
+            remloc[entt].first = reg->valid(remloc[entt].first) ? remloc[entt].first : reg->create();
             // set the dirty flag
             remloc[entt].second = true;
+        }
+    }
+
+    template<typename Container>
+    auto update(int, Container &container)
+    -> decltype(typename Container::mapped_type{}, void()) {
+        // map like container
+        Container other;
+
+        for(auto &&pair: container) {
+            using first_type = std::remove_const_t<typename std::decay_t<decltype(pair)>::first_type>;
+            using second_type = typename std::decay_t<decltype(pair)>::second_type;
+
+            if constexpr(std::is_same_v<first_type, Entity> && std::is_same_v<second_type, Entity>) {
+                other.emplace(map(pair.first), map(pair.second));
+            } else if constexpr(std::is_same_v<first_type, Entity>) {
+                other.emplace(map(pair.first), std::move(pair.second));
+            } else {
+                static_assert(std::is_same_v<second_type, Entity>);
+                other.emplace(std::move(pair.first), map(pair.second));
+            }
+        }
+
+        std::swap(container, other);
+    }
+
+    template<typename Container>
+    auto update(char, Container &container)
+    -> decltype(typename Container::value_type{}, void()) {
+        // vector like container
+        static_assert(std::is_same_v<typename Container::value_type, Entity>);
+
+        for(auto &&entt: container) {
+            entt = map(entt);
         }
     }
 
@@ -366,15 +395,13 @@ class basic_continuous_loader {
             instance.*member = map(instance.*member);
         } else {
             // maybe a container? let's try...
-            for(auto &entt: instance.*member) {
-                entt = map(entt);
-            }
+            update(0, instance.*member);
         }
     }
 
     template<typename Archive>
     void assure(Archive &archive, void(basic_continuous_loader:: *member)(Entity)) {
-        Entity length{};
+        typename traits_type::entity_type length{};
         archive(length);
 
         while(length--) {
@@ -389,24 +416,31 @@ class basic_continuous_loader {
         for(auto &&ref: remloc) {
             const auto local = ref.second.first;
 
-            if(reg.valid(local)) {
-                reg.template reset<Component>(local);
+            if(reg->valid(local)) {
+                reg->template reset<Component>(local);
             }
         }
     }
 
-    template<typename Other, typename Archive, typename Func, typename... Type, typename... Member>
-    void assign(Archive &archive, Func func, Member Type:: *... member) {
-        Entity length{};
+    template<typename Other, typename Archive, typename... Type, typename... Member>
+    void assign(Archive &archive, [[maybe_unused]] Member Type:: *... member) {
+        typename traits_type::entity_type length{};
         archive(length);
 
         while(length--) {
             Entity entt{};
-            Other instance{};
-            archive(entt, instance);
-            restore(entt);
-            (update(instance, member), ...);
-            func(map(entt), instance);
+
+            if constexpr(std::is_empty_v<Other>) {
+                archive(entt);
+                restore(entt);
+                reg->template assign_or_replace<Other>(map(entt));
+            } else {
+                Other instance{};
+                archive(entt, instance);
+                (update(instance, member), ...);
+                restore(entt);
+                reg->template assign_or_replace<Other>(map(entt), std::as_const(instance));
+            }
         }
     }
 
@@ -419,7 +453,7 @@ public:
      * @param source A valid reference to a registry.
      */
     basic_continuous_loader(basic_registry<entity_type> &source) ENTT_NOEXCEPT
-        : reg{source}
+        : reg{&source}
     {}
 
     /*! @brief Default move constructor. */
@@ -481,12 +515,8 @@ public:
      */
     template<typename... Component, typename Archive, typename... Type, typename... Member>
     basic_continuous_loader & component(Archive &archive, Member Type:: *... member) {
-        auto apply = [this](const auto entt, const auto &component) {
-            reg.template assign_or_replace<std::decay_t<decltype(component)>>(entt, component);
-        };
-
         (reset<Component>(), ...);
-        (assign<Component>(archive, apply, member...), ...);
+        (assign<Component>(archive, member...), ...);
         return *this;
     }
 
@@ -509,8 +539,8 @@ public:
                 dirty = false;
                 ++it;
             } else {
-                if(reg.valid(local)) {
-                    reg.destroy(local);
+                if(reg->valid(local)) {
+                    reg->destroy(local);
                 }
 
                 it = remloc.erase(it);
@@ -531,8 +561,8 @@ public:
      * @return A non-const reference to this loader.
      */
     basic_continuous_loader & orphans() {
-        reg.orphans([this](const auto entt) {
-            reg.destroy(entt);
+        reg->orphans([this](const auto entt) {
+            reg->destroy(entt);
         });
 
         return *this;
@@ -564,8 +594,8 @@ public:
     }
 
 private:
-    std::unordered_map<Entity, std::pair<Entity, bool>> remloc;
-    basic_registry<Entity> &reg;
+    std::unordered_map<entity_type, std::pair<entity_type, bool>> remloc;
+    basic_registry<entity_type> *reg;
 };
 
 

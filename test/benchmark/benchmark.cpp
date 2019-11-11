@@ -167,8 +167,7 @@ TEST(Benchmark, IterateSingleComponentRuntime1M) {
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = { registry.type<position>() };
+        entt::component types[] = { registry.type<position>() };
 
         timer timer;
         registry.runtime_view(std::begin(types), std::end(types)).each(func);
@@ -236,7 +235,7 @@ TEST(Benchmark, IterateTwoComponents1MOne) {
         const auto entity = registry.create();
         registry.assign<velocity>(entity);
 
-        if(i == 5000000L) {
+        if(i == 500000L) {
             registry.assign<position>(entity);
         }
     }
@@ -333,8 +332,7 @@ TEST(Benchmark, IterateTwoComponentsRuntime1M) {
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = { registry.type<position>(), registry.type<velocity>() };
+        entt::component types[] = { registry.type<position>(), registry.type<velocity>() };
 
         timer timer;
         registry.runtime_view(std::begin(types), std::end(types)).each(func);
@@ -362,8 +360,7 @@ TEST(Benchmark, IterateTwoComponentsRuntime1MHalf) {
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = { registry.type<position>(), registry.type<velocity>() };
+        entt::component types[] = { registry.type<position>(), registry.type<velocity>() };
 
         timer timer;
         registry.runtime_view(std::begin(types), std::end(types)).each(func);
@@ -385,14 +382,13 @@ TEST(Benchmark, IterateTwoComponentsRuntime1MOne) {
         const auto entity = registry.create();
         registry.assign<velocity>(entity);
 
-        if(i == 5000000L) {
+        if(i == 500000L) {
             registry.assign<position>(entity);
         }
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = { registry.type<position>(), registry.type<velocity>() };
+        entt::component types[] = { registry.type<position>(), registry.type<velocity>() };
 
         timer timer;
         registry.runtime_view(std::begin(types), std::end(types)).each(func);
@@ -464,7 +460,7 @@ TEST(Benchmark, IterateThreeComponents1MOne) {
         registry.assign<velocity>(entity);
         registry.assign<comp<0>>(entity);
 
-        if(i == 5000000L) {
+        if(i == 500000L) {
             registry.assign<position>(entity);
         }
     }
@@ -565,8 +561,7 @@ TEST(Benchmark, IterateThreeComponentsRuntime1M) {
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = { registry.type<position>(), registry.type<velocity>(), registry.type<comp<0>>() };
+        entt::component types[] = { registry.type<position>(), registry.type<velocity>(), registry.type<comp<0>>() };
 
         timer timer;
         registry.runtime_view(std::begin(types), std::end(types)).each(func);
@@ -596,8 +591,7 @@ TEST(Benchmark, IterateThreeComponentsRuntime1MHalf) {
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = { registry.type<position>(), registry.type<velocity>(), registry.type<comp<0>>() };
+        entt::component types[] = { registry.type<position>(), registry.type<velocity>(), registry.type<comp<0>>() };
 
         timer timer;
         registry.runtime_view(std::begin(types), std::end(types)).each(func);
@@ -621,14 +615,13 @@ TEST(Benchmark, IterateThreeComponentsRuntime1MOne) {
         registry.assign<velocity>(entity);
         registry.assign<comp<0>>(entity);
 
-        if(i == 5000000L) {
+        if(i == 500000L) {
             registry.assign<position>(entity);
         }
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = { registry.type<position>(), registry.type<velocity>(), registry.type<comp<0>>() };
+        entt::component types[] = { registry.type<position>(), registry.type<velocity>(), registry.type<comp<0>>() };
 
         timer timer;
         registry.runtime_view(std::begin(types), std::end(types)).each(func);
@@ -707,7 +700,7 @@ TEST(Benchmark, IterateFiveComponents1MOne) {
         registry.assign<comp<1>>(entity);
         registry.assign<comp<2>>(entity);
 
-        if(i == 5000000L) {
+        if(i == 500000L) {
             registry.assign<position>(entity);
         }
     }
@@ -842,8 +835,7 @@ TEST(Benchmark, IterateFiveComponentsRuntime1M) {
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = {
+        entt::component types[] = {
             registry.type<position>(),
             registry.type<velocity>(),
             registry.type<comp<0>>(),
@@ -883,8 +875,7 @@ TEST(Benchmark, IterateFiveComponentsRuntime1MHalf) {
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = {
+        entt::component types[] = {
             registry.type<position>(),
             registry.type<velocity>(),
             registry.type<comp<0>>(),
@@ -918,14 +909,13 @@ TEST(Benchmark, IterateFiveComponentsRuntime1MOne) {
         registry.assign<comp<1>>(entity);
         registry.assign<comp<2>>(entity);
 
-        if(i == 5000000L) {
+        if(i == 500000L) {
             registry.assign<position>(entity);
         }
     }
 
     auto test = [&registry](auto func) {
-        using component_type = typename entt::registry::component_type;
-        component_type types[] = {
+        entt::component types[] = {
             registry.type<position>(),
             registry.type<velocity>(),
             registry.type<comp<0>>(),

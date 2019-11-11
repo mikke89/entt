@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <entt/entity/entt_traits.hpp>
+#include <entt/core/type_traits.hpp>
 #include <entt/signal/emitter.hpp>
 
 struct test_emitter: entt::emitter<test_emitter> {};
@@ -8,7 +8,7 @@ struct foo_event { int i; char c; };
 struct bar_event {};
 struct quux_event {};
 
-ENTT_NAMED_TYPE(foo_event)
+ENTT_NAMED_TYPE(foo_event);
 
 TEST(Emitter, Clear) {
     test_emitter emitter;

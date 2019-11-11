@@ -1,13 +1,15 @@
+#include <gtest/gtest.h>
+#include <entt/entity/entity.hpp>
 #include <entt/entity/registry.hpp>
+#include <entt/meta/factory.hpp>
 #include <entt/signal/dispatcher.hpp>
 #include <entt/signal/emitter.hpp>
-#include <gtest/gtest.h>
 #include "types.h"
 
-extern typename entt::registry::component_type a_module_int_type();
-extern typename entt::registry::component_type a_module_char_type();
-extern typename entt::registry::component_type another_module_int_type();
-extern typename entt::registry::component_type another_module_char_type();
+extern typename entt::component a_module_int_type();
+extern typename entt::component a_module_char_type();
+extern typename entt::component another_module_int_type();
+extern typename entt::component another_module_char_type();
 
 extern void update_position(int delta, entt::registry &);
 extern void assign_velocity(int, entt::registry &);
@@ -15,15 +17,24 @@ extern void assign_velocity(int, entt::registry &);
 extern void trigger_an_event(int, entt::dispatcher &);
 extern void trigger_another_event(entt::dispatcher &);
 
+extern void emit_an_event(int, test_emitter &);
+extern void emit_another_event(test_emitter &);
+
+extern void a_module_bind_ctx(entt::meta_ctx);
+extern void another_module_bind_ctx(entt::meta_ctx);
+
+extern void a_module_meta_init();
+extern void another_module_meta_init();
+
+extern void a_module_meta_deinit();
+extern void another_module_meta_deinit();
+
 struct listener {
     void on_an_event(an_event event) { value = event.payload; }
     void on_another_event(another_event) {}
 
     int value;
 };
-
-ENTT_NAMED_TYPE(int)
-ENTT_NAMED_TYPE(char)
 
 TEST(Lib, Types) {
     entt::registry registry;
@@ -58,8 +69,8 @@ TEST(Lib, Registry) {
     update_position(1, registry);
 
     registry.view<position>().each([](auto entity, auto &position) {
-        ASSERT_EQ(position.x, entity + 2);
-        ASSERT_EQ(position.y, entity + 3);
+        ASSERT_EQ(position.x, entt::to_integer(entity) + 2);
+        ASSERT_EQ(position.y, entt::to_integer(entity) + 3);
     });
 }
 
@@ -67,13 +78,13 @@ TEST(Lib, Dispatcher) {
     entt::dispatcher dispatcher;
     listener listener;
 
-    dispatcher.sink<an_event>().connect<&listener::on_an_event>(&listener);
-    dispatcher.sink<another_event>().connect<&listener::on_another_event>(&listener);
+    dispatcher.sink<an_event>().connect<&listener::on_an_event>(listener);
+    dispatcher.sink<another_event>().connect<&listener::on_another_event>(listener);
 
     listener.value = 0;
 
-    trigger_another_event(dispatcher);
     trigger_an_event(3, dispatcher);
+    trigger_another_event(dispatcher);
 
     ASSERT_EQ(listener.value, 3);
 }
@@ -86,13 +97,44 @@ TEST(Lib, Emitter) {
         ASSERT_EQ(event.payload, 3);
     });
 
-    emitter.publish<an_event>(3);
-    emitter.publish<another_event>();
+    emit_an_event(3, emitter);
+    emit_another_event(emitter);
 
     emitter.once<an_event>([](an_event event, test_emitter &) {
         ASSERT_EQ(event.payload, 42);
     });
 
-    emitter.publish<another_event>();
-    emitter.publish<an_event>(42);
+    emit_an_event(42, emitter);
+    emit_another_event(emitter);
+}
+
+TEST(Lib, Meta) {
+    ASSERT_FALSE(entt::resolve("double"_hs));
+    ASSERT_FALSE(entt::resolve("char"_hs));
+    ASSERT_FALSE(entt::resolve("int"_hs));
+    ASSERT_FALSE(entt::resolve<int>().data("0"_hs));
+    ASSERT_FALSE(entt::resolve<char>().data("c"_hs));
+
+    a_module_bind_ctx(entt::meta_ctx{});
+    another_module_bind_ctx(entt::meta_ctx{});
+
+    entt::meta<double>().type("double"_hs).conv<int>();
+    another_module_meta_init();
+    a_module_meta_init();
+
+    ASSERT_TRUE(entt::resolve("double"_hs));
+    ASSERT_TRUE(entt::resolve("char"_hs));
+    ASSERT_TRUE(entt::resolve("int"_hs));
+    ASSERT_TRUE(entt::resolve<int>().data("0"_hs));
+    ASSERT_TRUE(entt::resolve<char>().data("c"_hs));
+
+    a_module_meta_deinit();
+    another_module_meta_deinit();
+    entt::meta<double>().reset();
+
+    ASSERT_FALSE(entt::resolve("double"_hs));
+    ASSERT_FALSE(entt::resolve("char"_hs));
+    ASSERT_FALSE(entt::resolve("int"_hs));
+    ASSERT_FALSE(entt::resolve<int>().data("0"_hs));
+    ASSERT_FALSE(entt::resolve<char>().data("c"_hs));
 }

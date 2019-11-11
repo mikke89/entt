@@ -87,6 +87,7 @@ SETUP_AND_ADD_TEST(family entt/core/family.cpp)
 SETUP_AND_ADD_TEST(hashed_string entt/core/hashed_string.cpp)
 SETUP_AND_ADD_TEST(ident entt/core/ident.cpp)
 SETUP_AND_ADD_TEST(monostate entt/core/monostate.cpp)
+SETUP_AND_ADD_TEST(type_traits entt/core/type_traits.cpp)
 SETUP_AND_ADD_TEST(utility entt/core/utility.cpp)
 
 # Test entity
@@ -95,11 +96,12 @@ SETUP_AND_ADD_TEST(actor entt/entity/actor.cpp)
 SETUP_AND_ADD_TEST(entity entt/entity/entity.cpp)
 SETUP_AND_ADD_TEST(group entt/entity/group.cpp)
 SETUP_AND_ADD_TEST(helper entt/entity/helper.cpp)
-SETUP_AND_ADD_TEST(prototype entt/entity/prototype.cpp)
+SETUP_AND_ADD_TEST(observer entt/entity/observer.cpp)
 SETUP_AND_ADD_TEST(registry entt/entity/registry.cpp)
 SETUP_AND_ADD_TEST(runtime_view entt/entity/runtime_view.cpp)
 SETUP_AND_ADD_TEST(snapshot entt/entity/snapshot.cpp)
 SETUP_AND_ADD_TEST(sparse_set entt/entity/sparse_set.cpp)
+SETUP_AND_ADD_TEST(storage entt/entity/storage.cpp)
 SETUP_AND_ADD_TEST(view entt/entity/view.cpp)
 
 # Test locator

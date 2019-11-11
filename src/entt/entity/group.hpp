@@ -8,26 +8,12 @@
 #include "../config/config.h"
 #include "../core/type_traits.hpp"
 #include "sparse_set.hpp"
+#include "storage.hpp"
+#include "utility.hpp"
 #include "fwd.hpp"
 
 
 namespace entt {
-
-
-/**
- * @brief Alias for lists of observed components.
- * @tparam Type List of types.
- */
-template<typename... Type>
-struct get_t: type_list<Type...> {};
-
-
-/**
- * @brief Variable template for lists of observed components.
- * @tparam Type List of types.
- */
-template<typename... Type>
-constexpr get_t<Type...> get{};
 
 
 /**
@@ -56,6 +42,7 @@ class basic_group;
  * * New instances of the given components are created and assigned to entities.
  * * The entity currently pointed is modified (as an example, if one of the
  *   given components is removed from the entity to which the iterator points).
+ * * The entity currently pointed is destroyed.
  *
  * In all the other cases, modifying the pools of the given components in any
  * way invalidates all the iterators and using them results in undefined
@@ -75,29 +62,39 @@ class basic_group;
  * In any other case, attempting to use a group results in undefined behavior.
  *
  * @tparam Entity A valid entity type (see entt_traits for more details).
- * @tparam Get Types of components observed by the group.
+ * @tparam Exclude Types of components used to filter the group.
+ * @tparam Get Type of components observed by the group.
  */
-template<typename Entity, typename... Get>
-class basic_group<Entity, get_t<Get...>> {
-    static_assert(sizeof...(Get) > 0);
-
+template<typename Entity, typename... Exclude, typename... Get>
+class basic_group<Entity, exclude_t<Exclude...>, get_t<Get...>> {
     /*! @brief A registry is allowed to create groups. */
     friend class basic_registry<Entity>;
 
     template<typename Component>
-    using pool_type = std::conditional_t<std::is_const_v<Component>, const sparse_set<Entity, std::remove_const_t<Component>>, sparse_set<Entity, Component>>;
+    using pool_type = std::conditional_t<std::is_const_v<Component>, const storage<Entity, std::remove_const_t<Component>>, storage<Entity, Component>>;
 
-    // we could use pool_type<Get> *..., but vs complains about it and refuses to compile for unknown reasons (likely a bug)
-    basic_group(sparse_set<Entity> *ref, sparse_set<Entity, std::remove_const_t<Get>> *... get) ENTT_NOEXCEPT
+    // we could use pool_type<Type> *..., but vs complains about it and refuses to compile for unknown reasons (most likely a bug)
+    basic_group(sparse_set<Entity> *ref, storage<Entity, std::remove_const_t<Get>> *... get) ENTT_NOEXCEPT
         : handler{ref},
           pools{get...}
     {}
 
+    template<typename Func, typename... Weak>
+    void traverse(Func func, type_list<Weak...>) const {
+        for(const auto entt: *handler) {
+            if constexpr(std::is_invocable_v<Func, decltype(get<Weak>({}))...>) {
+                func(std::get<pool_type<Weak> *>(pools)->get(entt)...);
+            } else {
+                func(entt, std::get<pool_type<Weak> *>(pools)->get(entt)...);
+            }
+        }
+    }
+
 public:
     /*! @brief Underlying entity identifier. */
-    using entity_type = typename sparse_set<Entity>::entity_type;
+    using entity_type = Entity;
     /*! @brief Unsigned integer type. */
-    using size_type = typename sparse_set<Entity>::size_type;
+    using size_type = std::size_t;
     /*! @brief Input iterator type. */
     using iterator_type = typename sparse_set<Entity>::iterator_type;
 
@@ -134,22 +131,19 @@ public:
     }
 
     /**
-     * @brief Checks whether the pool of a given component is empty.
-     * @tparam Component Type of component in which one is interested.
-     * @return True if the pool of the given component is empty, false
-     * otherwise.
+     * @brief Checks whether the group or the pools of the given components are
+     * empty.
+     * @tparam Component Types of components in which one is interested.
+     * @return True if the group or the pools of the given components are empty,
+     * false otherwise.
      */
-    template<typename Component>
+    template<typename... Component>
     bool empty() const ENTT_NOEXCEPT {
-        return std::get<pool_type<Component> *>(pools)->empty();
-    }
-
-    /**
-     * @brief Checks whether the group is empty.
-     * @return True if the group is empty, false otherwise.
-     */
-    bool empty() const ENTT_NOEXCEPT {
-        return handler->empty();
+        if constexpr(sizeof...(Component) == 0) {
+            return handler->empty();
+        } else {
+            return (std::get<pool_type<Component> *>(pools)->empty() && ...);
+        }
     }
 
     /**
@@ -162,11 +156,6 @@ public:
      * @note
      * There are no guarantees on the order of the components. Use `begin` and
      * `end` if you want to iterate the group in the expected order.
-     *
-     * @warning
-     * Empty components aren't explicitly instantiated. Only one instance of the
-     * given type is created. Therefore, this function always returns a pointer
-     * to that instance.
      *
      * @tparam Component Type of component in which one is interested.
      * @return A pointer to the array of components.
@@ -295,14 +284,13 @@ public:
      * @return The components assigned to the entity.
      */
     template<typename... Component>
-    std::conditional_t<sizeof...(Component) == 1, std::tuple_element_t<0, std::tuple<Component &...>>, std::tuple<Component &...>>
-    get([[maybe_unused]] const entity_type entt) const ENTT_NOEXCEPT {
+    decltype(auto) get([[maybe_unused]] const entity_type entt) const ENTT_NOEXCEPT {
         ENTT_ASSERT(contains(entt));
 
         if constexpr(sizeof...(Component) == 1) {
             return (std::get<pool_type<Component> *>(pools)->get(entt), ...);
         } else {
-            return std::tuple<Component &...>{get<Component>(entt)...};
+            return std::tuple<decltype(get<Component>({}))...>{get<Component>(entt)...};
         }
     }
 
@@ -321,18 +309,100 @@ public:
      * void(Get &...);
      * @endcode
      *
+     * @note
+     * Empty types aren't explicitly instantiated. Therefore, temporary objects
+     * are returned during iterations. They can be caught only by copy or with
+     * const references.
+     *
      * @tparam Func Type of the function object to invoke.
      * @param func A valid function object.
      */
     template<typename Func>
-    inline void each(Func func) const {
-        for(const auto entt: *handler) {
-            if constexpr(std::is_invocable_v<Func, std::add_lvalue_reference_t<Get>...>) {
-                func(std::get<pool_type<Get> *>(pools)->get(entt)...);
-            } else {
-                func(entt, std::get<pool_type<Get> *>(pools)->get(entt)...);
-            }
-        };
+    void each(Func func) const {
+        traverse(std::move(func), type_list<Get...>{});
+    }
+
+    /**
+     * @brief Iterates entities and components and applies the given function
+     * object to them.
+     *
+     * The function object is invoked for each entity. It is provided with the
+     * entity itself and a set of references to non-empty components. The
+     * _constness_ of the components is as requested.<br/>
+     * The signature of the function must be equivalent to one of the following
+     * forms:
+     *
+     * @code{.cpp}
+     * void(const entity_type, Type &...);
+     * void(Type &...);
+     * @endcode
+     *
+     * @sa each
+     *
+     * @tparam Func Type of the function object to invoke.
+     * @param func A valid function object.
+     */
+    template<typename Func>
+    void less(Func func) const {
+        using get_type_list = type_list_cat_t<std::conditional_t<ENTT_ENABLE_ETO(Get), type_list<>, type_list<Get>>...>;
+        traverse(std::move(func), get_type_list{});
+    }
+
+    /**
+     * @brief Sort a group according to the given comparison function.
+     *
+     * Sort the group so that iterating it with a couple of iterators returns
+     * entities and components in the expected order. See `begin` and `end` for
+     * more details.
+     *
+     * The comparison function object must return `true` if the first element
+     * is _less_ than the second one, `false` otherwise. The signature of the
+     * comparison function should be equivalent to one of the following:
+     *
+     * @code{.cpp}
+     * bool(std::tuple<Component &...>, std::tuple<Component &...>);
+     * bool(const Component &..., const Component &...);
+     * bool(const Entity, const Entity);
+     * @endcode
+     *
+     * Where `Component` are such that they are iterated by the group.<br/>
+     * Moreover, the comparison function object shall induce a
+     * _strict weak ordering_ on the values.
+     *
+     * The sort function oject must offer a member function template
+     * `operator()` that accepts three arguments:
+     *
+     * * An iterator to the first element of the range to sort.
+     * * An iterator past the last element of the range to sort.
+     * * A comparison function to use to compare the elements.
+     *
+     * @note
+     * Attempting to iterate elements using a raw pointer returned by a call to
+     * either `data` or `raw` gives no guarantees on the order, even though
+     * `sort` has been invoked.
+     *
+     * @tparam Component Optional types of components to compare.
+     * @tparam Compare Type of comparison function object.
+     * @tparam Sort Type of sort function object.
+     * @tparam Args Types of arguments to forward to the sort function object.
+     * @param compare A valid comparison function object.
+     * @param algo A valid sort function object.
+     * @param args Arguments to forward to the sort function object, if any.
+     */
+    template<typename... Component, typename Compare, typename Sort = std_sort, typename... Args>
+    void sort(Compare compare, Sort algo = Sort{}, Args &&... args) {
+        if constexpr(sizeof...(Component) == 0) {
+            static_assert(std::is_invocable_v<Compare, const entity_type, const entity_type>);
+            handler->sort(handler->begin(), handler->end(), std::move(compare), std::move(algo), std::forward<Args>(args)...);
+        }  else if constexpr(sizeof...(Component) == 1) {
+            handler->sort(handler->begin(), handler->end(), [this, compare = std::move(compare)](const entity_type lhs, const entity_type rhs) {
+                return compare((std::get<pool_type<Component> *>(pools)->get(lhs), ...), (std::get<pool_type<Component> *>(pools)->get(rhs), ...));
+            }, std::move(algo), std::forward<Args>(args)...);
+        } else {
+            handler->sort(handler->begin(), handler->end(), [this, compare = std::move(compare)](const entity_type lhs, const entity_type rhs) {
+                return compare(std::tuple<decltype(get<Component>({}))...>{std::get<pool_type<Component> *>(pools)->get(lhs)...}, std::tuple<decltype(get<Component>({}))...>{std::get<pool_type<Component> *>(pools)->get(rhs)...});
+            }, std::move(algo), std::forward<Args>(args)...);
+        }
     }
 
     /**
@@ -385,6 +455,7 @@ private:
  * * New instances of the given components are created and assigned to entities.
  * * The entity currently pointed is modified (as an example, if one of the
  *   given components is removed from the entity to which the iterator points).
+ * * The entity currently pointed is destroyed.
  *
  * In all the other cases, modifying the pools of the given components in any
  * way invalidates all the iterators and using them results in undefined
@@ -395,39 +466,62 @@ private:
  * that generated them. Therefore any change to the entities and to the
  * components made by means of the registry are immediately reflected by all the
  * groups.
+ * Moreover, sorting an owning group affects all the instance of the same group
+ * (it means that users don't have to call `sort` on each instance to sort all
+ * of them because they share the underlying data structure).
  *
  * @warning
  * Lifetime of a group must overcome the one of the registry that generated it.
  * In any other case, attempting to use a group results in undefined behavior.
  *
  * @tparam Entity A valid entity type (see entt_traits for more details).
+ * @tparam Exclude Types of components used to filter the group.
  * @tparam Get Types of components observed by the group.
  * @tparam Owned Types of components owned by the group.
  */
-template<typename Entity, typename... Get, typename... Owned>
-class basic_group<Entity, get_t<Get...>, Owned...> {
-    static_assert(sizeof...(Get) + sizeof...(Owned) > 0);
-
+template<typename Entity, typename... Exclude, typename... Get, typename... Owned>
+class basic_group<Entity, exclude_t<Exclude...>, get_t<Get...>, Owned...> {
     /*! @brief A registry is allowed to create groups. */
     friend class basic_registry<Entity>;
 
     template<typename Component>
-    using pool_type = std::conditional_t<std::is_const_v<Component>, const sparse_set<Entity, std::remove_const_t<Component>>, sparse_set<Entity, Component>>;
+    using pool_type = std::conditional_t<std::is_const_v<Component>, const storage<Entity, std::remove_const_t<Component>>, storage<Entity, Component>>;
 
     template<typename Component>
     using component_iterator_type = decltype(std::declval<pool_type<Component>>().begin());
 
-    // we could use pool_type<Type> *..., but vs complains about it and refuses to compile for unknown reasons (likely a bug)
-    basic_group(const typename basic_registry<Entity>::size_type *sz, sparse_set<Entity, std::remove_const_t<Owned>> *... owned, sparse_set<Entity, std::remove_const_t<Get>> *... get) ENTT_NOEXCEPT
-        : length{sz},
-          pools{owned..., get...}
+    // we could use pool_type<Type> *..., but vs complains about it and refuses to compile for unknown reasons (most likely a bug)
+    basic_group(const std::size_t *ref, const std::size_t *extent, storage<Entity, std::remove_const_t<Owned>> *... owned, storage<Entity, std::remove_const_t<Get>> *... get) ENTT_NOEXCEPT
+        : pools{owned..., get...},
+          length{extent},
+          super{ref}
     {}
+
+    template<typename Func, typename... Strong, typename... Weak>
+    void traverse(Func func, type_list<Strong...>, type_list<Weak...>) const {
+        [[maybe_unused]] auto raw = std::make_tuple((std::get<pool_type<Strong> *>(pools)->end() - *length)...);
+        [[maybe_unused]] auto data = std::get<0>(pools)->sparse_set<entity_type>::end() - *length;
+
+        for(auto next = *length; next; --next) {
+            if constexpr(std::is_invocable_v<Func, decltype(get<Strong>({}))..., decltype(get<Weak>({}))...>) {
+                if constexpr(sizeof...(Weak) == 0) {
+                    func(*(std::get<component_iterator_type<Strong>>(raw)++)...);
+                } else {
+                    const auto entt = *(data++);
+                    func(*(std::get<component_iterator_type<Strong>>(raw)++)..., std::get<pool_type<Weak> *>(pools)->get(entt)...);
+                }
+            } else {
+                const auto entt = *(data++);
+                func(entt, *(std::get<component_iterator_type<Strong>>(raw)++)..., std::get<pool_type<Weak> *>(pools)->get(entt)...);
+            }
+        }
+    }
 
 public:
     /*! @brief Underlying entity identifier. */
-    using entity_type = typename sparse_set<Entity>::entity_type;
+    using entity_type = Entity;
     /*! @brief Unsigned integer type. */
-    using size_type = typename sparse_set<Entity>::size_type;
+    using size_type = std::size_t;
     /*! @brief Input iterator type. */
     using iterator_type = typename sparse_set<Entity>::iterator_type;
 
@@ -450,22 +544,19 @@ public:
     }
 
     /**
-     * @brief Checks whether the pool of a given component is empty.
-     * @tparam Component Type of component in which one is interested.
-     * @return True if the pool of the given component is empty, false
-     * otherwise.
+     * @brief Checks whether the group or the pools of the given components are
+     * empty.
+     * @tparam Component Types of components in which one is interested.
+     * @return True if the group or the pools of the given components are empty,
+     * false otherwise.
      */
-    template<typename Component>
+    template<typename... Component>
     bool empty() const ENTT_NOEXCEPT {
-        return std::get<pool_type<Component> *>(pools)->empty();
-    }
-
-    /**
-     * @brief Checks whether the group is empty.
-     * @return True if the group is empty, false otherwise.
-     */
-    bool empty() const ENTT_NOEXCEPT {
-        return !*length;
+        if constexpr(sizeof...(Component) == 0) {
+            return !*length;
+        } else {
+            return (std::get<pool_type<Component> *>(pools)->empty() && ...);
+        }
     }
 
     /**
@@ -481,11 +572,6 @@ public:
      * @note
      * There are no guarantees on the order of the components. Use `begin` and
      * `end` if you want to iterate the group in the expected order.
-     *
-     * @warning
-     * Empty components aren't explicitly instantiated. Only one instance of the
-     * given type is created. Therefore, this function always returns a pointer
-     * to that instance.
      *
      * @tparam Component Type of component in which one is interested.
      * @return A pointer to the array of components.
@@ -617,14 +703,13 @@ public:
      * @return The components assigned to the entity.
      */
     template<typename... Component>
-    std::conditional_t<sizeof...(Component) == 1, std::tuple_element_t<0, std::tuple<Component &...>>, std::tuple<Component &...>>
-    get([[maybe_unused]] const entity_type entt) const ENTT_NOEXCEPT {
+    decltype(auto) get([[maybe_unused]] const entity_type entt) const ENTT_NOEXCEPT {
         ENTT_ASSERT(contains(entt));
 
         if constexpr(sizeof...(Component) == 1) {
             return (std::get<pool_type<Component> *>(pools)->get(entt), ...);
         } else {
-            return std::tuple<Component &...>{get<Component>(entt)...};
+            return std::tuple<decltype(get<Component>({}))...>{get<Component>(entt)...};
         }
     }
 
@@ -643,32 +728,128 @@ public:
      * void(Owned &..., Get &...);
      * @endcode
      *
+     * @note
+     * Empty types aren't explicitly instantiated. Therefore, temporary objects
+     * are returned during iterations. They can be caught only by copy or with
+     * const references.
+     *
      * @tparam Func Type of the function object to invoke.
      * @param func A valid function object.
      */
     template<typename Func>
-    inline void each(Func func) const {
-        auto raw = std::make_tuple((std::get<pool_type<Owned> *>(pools)->end() - *length)...);
-        [[maybe_unused]] auto data = std::get<0>(pools)->sparse_set<entity_type>::end() - *length;
+    void each(Func func) const {
+        traverse(std::move(func), type_list<Owned...>{}, type_list<Get...>{});
+    }
 
-        for(auto next = *length; next; --next) {
-            if constexpr(std::is_invocable_v<Func, std::add_lvalue_reference_t<Owned>..., std::add_lvalue_reference_t<Get>...>) {
-                if constexpr(sizeof...(Get) == 0) {
-                    func(*(std::get<component_iterator_type<Owned>>(raw)++)...);
-                } else {
-                    const auto entt = *(data++);
-                    func(*(std::get<component_iterator_type<Owned>>(raw)++)..., std::get<pool_type<Get> *>(pools)->get(entt)...);
-                }
-            } else {
-                const auto entt = *(data++);
-                func(entt, *(std::get<component_iterator_type<Owned>>(raw)++)..., std::get<pool_type<Get> *>(pools)->get(entt)...);
-            }
+    /**
+     * @brief Iterates entities and components and applies the given function
+     * object to them.
+     *
+     * The function object is invoked for each entity. It is provided with the
+     * entity itself and a set of references to non-empty components. The
+     * _constness_ of the components is as requested.<br/>
+     * The signature of the function must be equivalent to one of the following
+     * forms:
+     *
+     * @code{.cpp}
+     * void(const entity_type, Type &...);
+     * void(Type &...);
+     * @endcode
+     *
+     * @sa each
+     *
+     * @tparam Func Type of the function object to invoke.
+     * @param func A valid function object.
+     */
+    template<typename Func>
+    void less(Func func) const {
+        using owned_type_list = type_list_cat_t<std::conditional_t<ENTT_ENABLE_ETO(Owned), type_list<>, type_list<Owned>>...>;
+        using get_type_list = type_list_cat_t<std::conditional_t<ENTT_ENABLE_ETO(Get), type_list<>, type_list<Get>>...>;
+        traverse(std::move(func), owned_type_list{}, get_type_list{});
+    }
+
+    /**
+     * @brief Checks whether the group can be sorted.
+     * @return True if the group can be sorted, false otherwise.
+     */
+    bool sortable() const ENTT_NOEXCEPT {
+        constexpr auto size = sizeof...(Owned) + sizeof...(Get) + sizeof...(Exclude);
+        return *super == size;
+    }
+
+    /**
+     * @brief Sort a group according to the given comparison function.
+     *
+     * Sort the group so that iterating it with a couple of iterators returns
+     * entities and components in the expected order. See `begin` and `end` for
+     * more details.
+     *
+     * The comparison function object must return `true` if the first element
+     * is _less_ than the second one, `false` otherwise. The signature of the
+     * comparison function should be equivalent to one of the following:
+     *
+     * @code{.cpp}
+     * bool(std::tuple<Component &...>, std::tuple<Component &...>);
+     * bool(const Component &, const Component &);
+     * bool(const Entity, const Entity);
+     * @endcode
+     *
+     * Where `Component` are either owned types or not but still such that they
+     * are iterated by the group.<br/>
+     * Moreover, the comparison function object shall induce a
+     * _strict weak ordering_ on the values.
+     *
+     * The sort function oject must offer a member function template
+     * `operator()` that accepts three arguments:
+     *
+     * * An iterator to the first element of the range to sort.
+     * * An iterator past the last element of the range to sort.
+     * * A comparison function to use to compare the elements.
+     *
+     * @note
+     * Attempting to iterate elements using a raw pointer returned by a call to
+     * either `data` or `raw` gives no guarantees on the order, even though
+     * `sort` has been invoked.
+     *
+     * @tparam Component Optional types of components to compare.
+     * @tparam Compare Type of comparison function object.
+     * @tparam Sort Type of sort function object.
+     * @tparam Args Types of arguments to forward to the sort function object.
+     * @param compare A valid comparison function object.
+     * @param algo A valid sort function object.
+     * @param args Arguments to forward to the sort function object, if any.
+     */
+    template<typename... Component, typename Compare, typename Sort = std_sort, typename... Args>
+    void sort(Compare compare, Sort algo = Sort{}, Args &&... args) {
+        ENTT_ASSERT(sortable());
+        auto *cpool = std::get<0>(pools);
+
+        if constexpr(sizeof...(Component) == 0) {
+            static_assert(std::is_invocable_v<Compare, const entity_type, const entity_type>);
+            cpool->sort(cpool->end()-*length, cpool->end(), std::move(compare), std::move(algo), std::forward<Args>(args)...);
+        } else if constexpr(sizeof...(Component) == 1) {
+            cpool->sort(cpool->end()-*length, cpool->end(), [this, compare = std::move(compare)](const entity_type lhs, const entity_type rhs) {
+                return compare((std::get<pool_type<Component> *>(pools)->get(lhs), ...), (std::get<pool_type<Component> *>(pools)->get(rhs), ...));
+            }, std::move(algo), std::forward<Args>(args)...);
+        } else {
+            cpool->sort(cpool->end()-*length, cpool->end(), [this, compare = std::move(compare)](const entity_type lhs, const entity_type rhs) {
+                return compare(std::tuple<decltype(get<Component>({}))...>{std::get<pool_type<Component> *>(pools)->get(lhs)...}, std::tuple<decltype(get<Component>({}))...>{std::get<pool_type<Component> *>(pools)->get(rhs)...});
+            }, std::move(algo), std::forward<Args>(args)...);
         }
+
+        [](std::size_t length, auto *cpool, auto *... other) {
+            for(auto next = length; next; --next) {
+                const auto pos = next - 1;
+                [[maybe_unused]] const auto entt = cpool->data()[pos];
+                (other->swap(other->data()[pos], entt), ...);
+            }
+        }(*length, std::get<pool_type<Owned> *>(pools)...);
     }
 
 private:
-    const typename basic_registry<Entity>::size_type *length;
     const std::tuple<pool_type<Owned> *..., pool_type<Get> *...> pools;
+    const size_type *length;
+    const size_type *super;
 };
 
 

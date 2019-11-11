@@ -5,25 +5,34 @@
 * debugging tools (#60): the issue online already contains interesting tips on this, look at it
 * runner proposal: https://en.wikipedia.org/wiki/Fork%E2%80%93join_model https://slide-rs.github.io/specs/03_dispatcher.html
 * work stealing job system (see #100)
+  - mt scheduler based on const awareness for types
 * meta: sort of meta view based on meta stuff to iterate entities, void * and meta info objects
 * allow for built-in parallel each if possible
 * allow to replace std:: with custom implementations
-* allow to sort groups (::respect can already work with begin/end instead of a whole sparse set)
-  -it would ease by far the group trick for hierarchies that requires otherwise more boilerplate
 * remove runtime views, welcome reflection and what about snapshot?
-* empty components model allows for shared components and prefabs unity-like
-  - each with entity return the shared component multiple times, one per entity that refers to it
-  - each components only return actual component, so shared components are returned only once
 * types defined at runtime that refer to the same compile-time type (but to different pools) are possible, the library is almost there
-* add take functionality, eg registry.take(entity, other); where it takes the entity and all its components from registry and move them to other
-* add entity function to views/groups (component -> owner, see sparse sets)
 * add opaque input iterators to views and groups that return tuples <entity, T &...> (proxy), multi-pass guaranteed
 * add fast lane for raw iterations, extend mt doc to describe allowed add/remove with pre-allocations on fast lanes
-* review sparse set to allow customization (mix pack in the spec, base is position only)
-  - non-owning groups can iterate pages and skip empty ones, this should mitigate the lack of the packed array
-* review 64 bit id: user defined area + dedicated member on the registry to set it
-* events on replace, so that one can track updated components
-  - introduce ENTT_REPLACE_ONLY mode
-  - define basic reactive systems (track entities to which component is attached, track entities from which component is removed, and so on)
-  - define systems as composable mixins (initializazion, reactive, update, whatever) with flexible auto-detected arguments (registry, views, etc)
-  - from Tommaso on discord view<Health, Transform>().where<Health>([](h) {h > 5}).where<Transform>([](t) {t.inside(aabb)});
+* registry.each<T...>(first, last) by iterators, entities/components guaranteed
+* built-in support for dual (or N-) buffering
+* allow for custom stomp functions
+* deprecate/replace snapshot
+* hibitset, views and non-owning groups
+* custom (decoupled) pools ==> double buffering, shared components, multi-model
+* snapshot rework/deprecation
+  - create(hint: entity) -> force-create
+  - assign<T...>(first, last)
+* use unordered_map for named pools and context variables:
+  - use direct access (pool-like) also for context variables
+  - allow for key/value variables where the key is an ENTT_ID_TYPE
+  - improves multi-stomp
+* multi component registry::remove and some others?
+  - auto foo(It first, It last = entity_type{null})
+* range based registry::remove and some others?
+* add examples (and credits) from @alanjfs :)
+* explore the possibility to wrap other backend with a XHandler component
+* use [[nodiscard]] consistently for safety purposes
+* static reflection, hint: template<> meta_type_t<Type>: meta_descriptor<name, func..., props..., etc...>
+* null support for entt::component
+* add ENTT_CUSTOM_NAMED_TYPE for custom names
+* Make another attempt to overcome named types

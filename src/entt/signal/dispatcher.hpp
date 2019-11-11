@@ -4,7 +4,9 @@
 
 #include <vector>
 #include <memory>
+#include <cstddef>
 #include <utility>
+#include <algorithm>
 #include <type_traits>
 #include "../config/config.h"
 #include "../core/family.hpp"
@@ -24,9 +26,9 @@ namespace entt {
  * type `Event`, listeners are such that they can be invoked with an argument of
  * type `const Event &`, no matter what the return type is.
  *
- * The type of the instances is `Class *` (a naked pointer). It means that users
- * must guarantee that the lifetimes of the instances overcome the one of the
- * dispatcher itself to avoid crashes.
+ * The types of the instances are `Class &`. Users must guarantee that the
+ * lifetimes of the objects overcome the one of the dispatcher itself to avoid
+ * crashes.
  */
 class dispatcher {
     using event_family = family<struct internal_dispatcher_event_family>;
@@ -37,6 +39,7 @@ class dispatcher {
     struct base_wrapper {
         virtual ~base_wrapper() = default;
         virtual void publish() = 0;
+        virtual void clear() = 0;
     };
 
     template<typename Event>
@@ -45,32 +48,36 @@ class dispatcher {
         using sink_type = typename signal_type::sink_type;
 
         void publish() override {
-            for(const auto &event: events[current]) {
-                signal.publish(event);
+            const auto length = events.size();
+
+            for(std::size_t pos{}; pos < length; ++pos) {
+                signal.publish(events[pos]);
             }
 
-            events[current++].clear();
-            current %= std::extent<decltype(events)>::value;
+            events.erase(events.cbegin(), events.cbegin()+length);
         }
 
-        inline sink_type sink() ENTT_NOEXCEPT {
-            return signal.sink();
+        void clear() override {
+            events.clear();
+        }
+
+        sink_type sink() ENTT_NOEXCEPT {
+            return entt::sink{signal};
         }
 
         template<typename... Args>
-        inline void trigger(Args &&... args) {
+        void trigger(Args &&... args) {
             signal.publish({ std::forward<Args>(args)... });
         }
 
         template<typename... Args>
-        inline void enqueue(Args &&... args) {
-            events[current].emplace_back(std::forward<Args>(args)...);
+        void enqueue(Args &&... args) {
+            events.emplace_back(std::forward<Args>(args)...);
         }
 
     private:
         signal_type signal{};
-        std::vector<Event> events[2];
-        int current{};
+        std::vector<Event> events;
     };
 
     struct wrapper_data {
@@ -81,7 +88,7 @@ class dispatcher {
     template<typename Event>
     static auto type() ENTT_NOEXCEPT {
         if constexpr(is_named_type_v<Event>) {
-            return named_type_traits<Event>::value;
+            return named_type_traits_v<Event>;
         } else {
             return event_family::type<Event>;
         }
@@ -143,7 +150,7 @@ public:
      * @return A temporary sink object.
      */
     template<typename Event>
-    inline sink_type<Event> sink() ENTT_NOEXCEPT {
+    sink_type<Event> sink() ENTT_NOEXCEPT {
         return assure<Event>().sink();
     }
 
@@ -158,7 +165,7 @@ public:
      * @param args Arguments to use to construct the event.
      */
     template<typename Event, typename... Args>
-    inline void trigger(Args &&... args) {
+    void trigger(Args &&... args) {
         assure<Event>().trigger(std::forward<Args>(args)...);
     }
 
@@ -172,7 +179,7 @@ public:
      * @param event An instance of the given type of event.
      */
     template<typename Event>
-    inline void trigger(Event &&event) {
+    void trigger(Event &&event) {
         assure<std::decay_t<Event>>().trigger(std::forward<Event>(event));
     }
 
@@ -187,7 +194,7 @@ public:
      * @param args Arguments to use to construct the event.
      */
     template<typename Event, typename... Args>
-    inline void enqueue(Args &&... args) {
+    void enqueue(Args &&... args) {
         assure<Event>().enqueue(std::forward<Args>(args)...);
     }
 
@@ -201,8 +208,29 @@ public:
      * @param event An instance of the given type of event.
      */
     template<typename Event>
-    inline void enqueue(Event &&event) {
+    void enqueue(Event &&event) {
         assure<std::decay_t<Event>>().enqueue(std::forward<Event>(event));
+    }
+
+    /**
+     * @brief Discards all the events queued so far.
+     *
+     * If no types are provided, the dispatcher will clear all the existing
+     * pools.
+     *
+     * @tparam Event Type of events to discard.
+     */
+    template<typename... Event>
+    void discard() {
+        if constexpr(sizeof...(Event) == 0) {
+            std::for_each(wrappers.begin(), wrappers.end(), [](auto &&wdata) {
+                if(wdata.wrapper) {
+                    wdata.wrapper->clear();
+                }
+            });
+        } else {
+            (assure<std::decay_t<Event>>().clear(), ...);
+        }
     }
 
     /**
@@ -215,7 +243,7 @@ public:
      * @tparam Event Type of events to send.
      */
     template<typename Event>
-    inline void update() {
+    void update() {
         assure<Event>().publish();
     }
 
@@ -226,11 +254,9 @@ public:
      * delivered to the registered listeners. It's responsibility of the users
      * to reduce at a minimum the time spent in the bodies of the listeners.
      */
-    inline void update() const {
+    void update() const {
         for(auto pos = wrappers.size(); pos; --pos) {
-            auto &wdata = wrappers[pos-1];
-
-            if(wdata.wrapper) {
+            if(auto &wdata = wrappers[pos-1]; wdata.wrapper) {
                 wdata.wrapper->publish();
             }
         }

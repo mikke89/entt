@@ -1,4 +1,5 @@
 #include <entt/entity/registry.hpp>
+#include <entt/meta/factory.hpp>
 #include <entt/signal/dispatcher.hpp>
 #include <entt/signal/emitter.hpp>
 #include "types.h"
@@ -13,29 +14,24 @@
 #endif
 #endif
 
-ENTT_NAMED_TYPE(int)
-ENTT_NAMED_TYPE(char)
-ENTT_NAMED_TYPE(double)
-ENTT_NAMED_TYPE(float)
-
-LIB_EXPORT typename entt::registry::component_type another_module_int_type() {
+LIB_EXPORT typename entt::component another_module_int_type() {
     entt::registry registry;
 
     (void)registry.type<char>();
-    (void)registry.type<const int>();
     (void)registry.type<double>();
+    (void)registry.type<const int>();
     (void)registry.type<const char>();
     (void)registry.type<float>();
 
     return registry.type<int>();
 }
 
-LIB_EXPORT typename entt::registry::component_type another_module_char_type() {
+LIB_EXPORT typename entt::component another_module_char_type() {
     entt::registry registry;
 
     (void)registry.type<int>();
-    (void)registry.type<const char>();
     (void)registry.type<float>();
+    (void)registry.type<const char>();
     (void)registry.type<const int>();
     (void)registry.type<double>();
 
@@ -54,4 +50,16 @@ LIB_EXPORT void trigger_an_event(int payload, entt::dispatcher &dispatcher) {
 
 LIB_EXPORT void emit_an_event(int payload, test_emitter &emitter) {
     emitter.publish<an_event>(payload);
+}
+
+LIB_EXPORT void another_module_bind_ctx(entt::meta_ctx context) {
+    entt::meta_ctx::bind(context);
+}
+
+LIB_EXPORT void another_module_meta_init() {
+    entt::meta<int>().type().data<0>("0"_hs);
+}
+
+LIB_EXPORT void another_module_meta_deinit() {
+    entt::meta<int>().reset();
 }
